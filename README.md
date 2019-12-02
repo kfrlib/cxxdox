@@ -27,4 +27,6 @@ https://www.kfrlib.com/newdocs/index.html
 
 ## License
 
-MIT License
+Apache license
+
+Contains parts of Clang code (see `clang` folder for license details)
