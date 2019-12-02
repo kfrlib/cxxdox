@@ -1,0 +1,51 @@
+site_name: Test
+theme:
+  name: 'material'
+  feature:
+    tabs: true
+extra:
+  search:
+    language: en
+
+  social:
+    - type: 'github'
+      link: 'https://github.com/kfrlib'
+    - type: 'twitter'
+      link: 'https://twitter.com/kfrlib'
+
+copyright: 'Copyright &copy; 2016 - 2019 KFR'
+
+plugins:
+    - search
+
+markdown_extensions:
+  - admonition
+  - codehilite:
+      guess_lang: false
+  - footnotes
+  - meta
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.snippets:
+      check_paths: true
+      base_path: docs/fragments
+
+extra_javascript:
+  - js/math.js
+  - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0/katex.min.js
+
+extra_css:
+  - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0/katex.min.css
+
+repo_url: https://github.com/kfrlib/kfr
+repo_name: KFR
+
+nav:
+  - index.md
+  - default.md
+  - refindex.md

@@ -1,0 +1,12 @@
+title: TEST
+
+postprocessor:
+  ignore: 
+    - TEST_EMPTY_DEFINE
+  
+input_directory: .
+
+masks: ['**/*.hpp']
+
+groups:
+  main: "Main"
