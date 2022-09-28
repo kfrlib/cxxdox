@@ -292,7 +292,7 @@ if __name__ == '__main__':
     defaults = {'clang': {'arguments': []}, 'repository': '', 'postprocessor': {'ignore': []}, 'masks': [
         '**/*.hpp', '**/*.cpp', '**/*.cxx', '**/*.hxx', '**/*.h'], 'groups': {}}
 
-    config = yaml.load(open(args.config_path, 'r', encoding='utf-8'))
+    config = yaml.safe_load(open(args.config_path, 'r', encoding='utf-8'))
 
     print(config)
     config = {**defaults, **config}

@@ -12,7 +12,7 @@ mkdir -p /out/docs/auto
 echo copy /src/${1}/. to /out
 cp -a /src/${1}/. /out
 
-python3 cparser.py --libclang /usr/lib/libclang.so.8 /src/${1}/cxxdox.yml /data/cxxindex.json
+python3 cparser.py --libclang /usr/lib/libclang.so.13 /src/${1}/cxxdox.yml /data/cxxindex.json
 
 python3 generator_markdown.py --refindex /data/cxxindex.json /out/docs/auto
 

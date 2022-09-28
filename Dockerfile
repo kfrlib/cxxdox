@@ -1,12 +1,10 @@
-FROM alpine:latest
+FROM alpine:3.16
 
 RUN apk update && apk upgrade && apk add --no-cache python3 && python3 -m ensurepip && pip3 install --upgrade pip setuptools
 
 RUN pip3 install mkdocs-material
 
-RUN apk add --no-cache g++ cmake make
-
-RUN apk add --no-cache 'clang-libs~=8.0' 'clang~=8.0' --repository=http://dl-cdn.alpinelinux.org/alpine/v3.10/main
+RUN apk add --no-cache g++ cmake make 'clang-libs~=13.0' 'clang~=13.0'
 
 WORKDIR /opt
 
