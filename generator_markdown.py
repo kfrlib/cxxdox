@@ -53,7 +53,7 @@ def generate_item(index, item, indent=0, item_header=['']):
                             '\n```\n\n', p=p, remove_empty_lines=False) + '\n'
 
     description = item['description']
-    if isinstance(description, collections.Mapping) and 'copy' in description:
+    if isinstance(description, collections.abc.Mapping) and 'copy' in description:
         for it in index['index']:
             if it['qualifiedname'] == description['copy']:
                 description = it['description']

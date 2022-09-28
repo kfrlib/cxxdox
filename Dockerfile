@@ -5,6 +5,7 @@ RUN apk update && apk upgrade && apk add --no-cache python3 && python3 -m ensure
 RUN pip3 install mkdocs-material
 
 RUN apk add --no-cache g++ cmake make 'clang-libs~=13.0' 'clang~=13.0'
+RUN apk add --no-cache 'clang-extra-tools~=13.0'
 
 WORKDIR /opt
 
