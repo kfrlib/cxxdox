@@ -1,11 +1,15 @@
-FROM alpine:3.16
+FROM alpine:3.20.3
 
-RUN apk update && apk upgrade && apk add --no-cache python3 && python3 -m ensurepip && pip3 install --upgrade pip setuptools
+RUN apk update
+RUN apk add --no-cache python3 mkdocs-material
+RUN apk add --no-cache g++ cmake make 'clang18-libs' 'clang18' 'clang18-extra-tools'
+RUN apk add --no-cache py3-regex
 
-RUN pip3 install mkdocs-material
+WORKDIR /opt/clang
 
-RUN apk add --no-cache g++ cmake make 'clang-libs~=13.0' 'clang~=13.0'
-RUN apk add --no-cache 'clang-extra-tools~=13.0'
+RUN wget https://raw.githubusercontent.com/llvm/llvm-project/refs/heads/release/18.x/clang/bindings/python/clang/__init__.py
+RUN wget https://raw.githubusercontent.com/llvm/llvm-project/refs/heads/release/18.x/clang/bindings/python/clang/cindex.py
+RUN wget https://raw.githubusercontent.com/llvm/llvm-project/refs/heads/release/18.x/clang/bindings/python/clang/enumerations.py
 
 WORKDIR /opt
 
@@ -13,8 +17,6 @@ ADD cparser.py .
 ADD generator_markdown.py .
 ADD generator.py .
 ADD run_examples.py .
-
-ADD clang ./clang
 
 ADD run.sh .
 
