@@ -4,7 +4,7 @@ CxxDox is a documentation generator for C++ projects that creates markdown files
 
 Using `libclang` allows CxxDox to handle complex, template-heavy C++ projects and support the latest C++ standards. This integration ensures reliable parsing of advanced templates, metaprogramming, and new language features, allowing CxxDox to generate accurate documentation even for projects using cutting-edge C++ constructs.
 
-Current libclang version: `18` (C++20 and c++23 support)
+Current libclang version: `19` (C++20 and c++23 support)
 
 ## Features
 

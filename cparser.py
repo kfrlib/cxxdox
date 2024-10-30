@@ -175,12 +175,17 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             entity['type'] = 'typedef'
             entity['name'] = node.spelling
             entity['definition'] = re.sub(r'(^|\s+)using\s+', r'', definition)
-        elif node.kind in [CursorKind.VAR_DECL, CursorKind.UNEXPOSED_DECL]:
+        elif node.kind in [CursorKind.VAR_DECL, CursorKind.UNEXPOSED_DECL, CursorKind.FIELD_DECL]:
             entity['type'] = 'variable'
             entity['name'] = node.spelling
             entity['definition'] = definition
         elif node.kind in [CursorKind.NAMESPACE]:
             entity['type'] = 'namespace'
+            entity['name'] = node.displayname
+            entity['definition'] = definition
+            entity['source'] = definition + ' { ... }'
+        elif node.kind in [CursorKind.CONCEPT_DECL]:
+            entity['type'] = 'concept'
             entity['name'] = node.displayname
             entity['definition'] = definition
             entity['source'] = definition + ' { ... }'
