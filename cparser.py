@@ -12,19 +12,36 @@ import codecs
 import re
 import os
 from typing import List, Dict
+from common import remove_padding
 
 file_cache = {}
 
 
 rules = [
-    [r'@c\s+(\w+)', 'inlinecode'],
-    [r'\s*[@\\]code(.*?)\s+[@\\]endcode\s*', 'blockcode'],
-    [r'\\f\\\((.*?)\\f\\\)', 'inlinemath'],
-    [r'\\f\$(.*?)\\f\$', 'inlinemath'],
-    [r'\s*\\f\[(.*?)\\f\]\s*', 'blockmath'],
-    [r'@param\s+(\w+)', 'param'],
-]
+    [r'[@\\]c\s+(\S+)', 'inlinecode', 1],
+    [r'[@\\]ref\s+(\S+)', 'ref', 1],
+    [r'\s*[@\\]code(.*?)\s+[@\\]endcode\s*', 'blockcode', 1],
+    [r'\\f\\\((.*?)\\f\\\)', 'inlinemath', 1],
+    [r'\\f\$(.*?)\\f\$', 'inlinemath', 1],
+    [r'\s*\\f\[(.*?)\\f\]\s*', 'blockmath', 1],
+    
+    [r'[@\\]concept\s+', 'concept', 0],
+    [r'[@\\]class\s+', 'class', 0],
+    [r'[@\\]struct\s+', 'struct', 0],
+    [r'[@\\]fn\s+', 'function', 0],
+    [r'[@\\]enum\s+', 'enum', 0],
+    [r'[@\\]typedef\s+', 'typedef', 0],
+    
+    [r'[@\\]param\s+(\S+)', 'param', 1],
+    [r'[@\\]tparam\s+(\S+)', 'tparam', 1],
 
+    [r'[@\\](?:throws?|exceptions?)\s+(\S+)', 'exceptions', 1],
+    [r'[@\\](?:details|remark)\s+', 'details', 0],
+    [r'[@\\](?:threadsafe|threadsafety)\s+', 'threadsafety', 0],
+    [r'[@\\]note\s+', 'note', 0],
+    [r'[@\\](?:see|sa)\s+', 'note', 0],
+    [r'[@\\]returns?\s+', 'return', 0],
+]
 
 def parse_description(s):
     if isinstance(s, str):
@@ -32,7 +49,7 @@ def parse_description(s):
             m = re.search(rule[0], s, re.MULTILINE | re.DOTALL)
             if m is not None:
                 prefix = s[:m.start()]
-                match = remove_padding(m.group(1)).strip()
+                match = remove_padding(m.group(1)).strip() if rule[2] > 0 else ''
                 postfix = s[m.end():]
                 return parse_description([prefix, {rule[1]: match}, postfix])
 
@@ -44,7 +61,7 @@ def parse_description(s):
                 rr = parse_description(ss)
                 if isinstance(rr, str):
                     if len(rr) > 0:
-                        r.append(rr)
+                        r.append(rr.strip())
                 else:
                     r.extend(rr)
             else:
@@ -59,18 +76,6 @@ def clean_text(str):
     str = str.replace('\r', '')
     return str
 
-
-def remove_padding(s):
-    lines = s.splitlines()
-    minpadding = 100
-    for l in lines:
-        if len(l) > 0:
-            minpadding = min(minpadding, len(l) - len(l.lstrip(' ')))
-    if minpadding == 100:
-        return s
-
-    lines = [l[minpadding:] for l in lines]
-    return '\n'.join(lines)
 
 
 def get_location(node):
@@ -108,6 +113,8 @@ def clean_comment(s):
     s = s.strip()
     if s.startswith('///<'):
         return remove_padding(s[4:])
+    elif s.startswith('/**<'):
+        return remove_padding(s[4::-2])
     elif s.startswith('///'):
         return remove_padding(re.sub(r'^\s*///', '', s, flags=re.MULTILINE))
     elif s.startswith('/**'):
@@ -144,7 +151,7 @@ def source_to_definition(source):
     return source
 
 
-def parse_index(root_path, index: List[Dict], node, root_location, group: str, ns: str = '', macros={}):
+def parse_index(root_path, index: List[Dict], node, root_location, group: str, ns: str = '', macros={}, include_source=False):
 
     source = ''
     if node.brief_comment is not None:
@@ -153,7 +160,7 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
 
         entity: Dict = {}
 
-        if node.kind in [CursorKind.FUNCTION_TEMPLATE, CursorKind.FUNCTION_DECL, CursorKind.CXX_METHOD, CursorKind.CONSTRUCTOR, CursorKind.DESTRUCTOR]:
+        if node.kind in [CursorKind.FUNCTION_TEMPLATE, CursorKind.FUNCTION_DECL, CursorKind.CXX_METHOD, CursorKind.CONSTRUCTOR, CursorKind.DESTRUCTOR, CursorKind.CONVERSION_FUNCTION, CursorKind.USING_DECLARATION]:
             entity['type'] = 'function'
             entity['name'] = node.spelling
             entity['definition'] = definition
@@ -189,10 +196,9 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             entity['name'] = node.displayname
             entity['definition'] = definition
             entity['source'] = definition + ' { ... }'
-        elif node.kind in [CursorKind.USING_DECLARATION]:
-            entity['type'] = 'function'
-            entity['name'] = node.spelling
-            entity['definition'] = definition
+        elif node.kind in [CursorKind.FRIEND_DECL]:
+            print("ignored: {}".format(node.kind))
+            return
         else:
             print('warning: Unknown cursor kind: {} for {}'.format(
                 node.kind, node.displayname))
@@ -201,6 +207,9 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
         entity['qualifiedname'] = re.sub('^::', '', ns + '::' + entity['name'])
         if 'source' not in entity:
             entity['source'] = source
+
+        if not include_source:
+            entity['source'] = ""
         entity['file'] = os.path.relpath(
             get_location(node), root_path).replace('\\', '/')
         entity['line'] = get_location_line(node)
@@ -210,7 +219,6 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
                      description.strip())
         if m:
             copyFrom = m.group(1)
-            print("Copying from {}".format(copyFrom))
             description = {"copy": copyFrom}
         else:
             description = re.sub(r'\s*@brief\s*', '', description)
@@ -239,7 +247,7 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             parse_index(root_path, index, c, root_location, group, ns, macros)
 
 
-def parse(root_path, filenames: List[str], clang_args: List[str], macros={}):
+def parse(root_path, filenames: List[str], clang_args: List[str], macros={}, include_source=False):
 
     index = []
 
@@ -252,6 +260,8 @@ def parse(root_path, filenames: List[str], clang_args: List[str], macros={}):
             m = re.search(r'@addtogroup\s+([a-zA-Z0-9_-]+)', text)
             if m:
                 group = m.group(1)
+            else:
+                group = os.path.basename(os.path.dirname(filename))
 
         clangIndex = Index.create()
         tu = clangIndex.parse(None, [filename.replace('\\', '/')] + clang_args)
@@ -267,7 +277,7 @@ def parse(root_path, filenames: List[str], clang_args: List[str], macros={}):
 
         count = len(index)
         parse_index(root_path, index, tu.cursor,
-                    tu.cursor.displayname, group, '', macros)
+                    tu.cursor.displayname, group, '', macros, include_source)
         print('    Found {} entities'.format(len(index) - count))
 
     return index
@@ -295,7 +305,7 @@ if __name__ == '__main__':
 
     config = None
     defaults = {'clang': {'arguments': []}, 'repository': '', 'postprocessor': {'ignore': []}, 'masks': [
-        '**/*.hpp', '**/*.cpp', '**/*.cxx', '**/*.hxx', '**/*.h'], 'groups': {}}
+        '**/*.hpp', '**/*.cpp', '**/*.cxx', '**/*.hxx', '**/*.h'], 'groups': {}, 'include_source': False}
 
     config = yaml.safe_load(open(args.config_path, 'r', encoding='utf-8'))
 
@@ -319,11 +329,14 @@ if __name__ == '__main__':
     git_tag = ''
 
     if args.git:
-        git_tag = subprocess.check_output(
-            ['git', 'describe', '--always', '--abbrev=0'], cwd=input_dir).strip()
-        git_tag = codecs.decode(git_tag)
-        print('GIT:')
-        print(git_tag)
+        try:
+            git_tag = subprocess.check_output(
+                ['git', 'describe', '--always', '--abbrev=0'], cwd=input_dir).strip()
+            git_tag = codecs.decode(git_tag)
+            print('GIT:')
+            print(git_tag)
+        except:
+            pass
 
     file_masks = config['masks']
 
@@ -335,7 +348,7 @@ if __name__ == '__main__':
 
     macros = {k: '' for k in macros}
 
-    index = cparser.parse(input_dir, filenames, clang_args, macros)
+    index = cparser.parse(input_dir, filenames, clang_args, macros, config['include_source'])
 
     index = {'index': index, 'git_tag': git_tag, 'repository': config['repository'].replace(
         '{TAG}', git_tag), 'groups': config['groups']}

@@ -4,9 +4,18 @@ import os
 import json
 import re
 from typing import List, Dict
-from cparser import remove_padding
+from common import remove_padding
 import collections
 
+def markdown_safe(s):
+    return s.replace('>', r'\>')
+
+labels = {
+    "exceptions":"Exceptions",
+    "details":"Details",
+    "note":"Note",
+    "threadsafety":"Thread safety",
+}
 
 def generate_descriptions(s):
     if isinstance(s, str):
@@ -14,21 +23,32 @@ def generate_descriptions(s):
     md = ''
     for ss in s:
         if isinstance(ss, str):
-            md += ss
+            md += markdown_safe(ss)
         else:
-            if 'inlinecode' in ss:
+            key = next(iter(ss))
+            if key in ['concept', 'class', 'struct', 'function', 'typedef', 'enum']:
+                pass # Skip
+            elif key == 'inlinecode':
                 md += '`' + ss['inlinecode'] + '`'
-            elif 'inlinemath' in ss:
+            elif key == 'inlinemath':
                 md += '$' + ss['inlinemath'] + '$'
-            elif 'param' in ss:
-                md += '<br/>**' + ss['param'] + '**'
-            elif 'blockmath' in ss:
-                md += '\n\n$$\n' + remove_padding(ss['blockmath']) + '\n$$\n\n'
-            elif 'blockcode' in ss:
+            elif key == 'param':
+                md += '<br/>Param **' + markdown_safe(ss['param']) + '** '
+            elif key == 'return':
+                md += '<br/>**Returns** '
+            elif key == 'see':
+                md += '<br/>**See** '
+            elif key == 'tparam':
+                md += '<br/>**' + markdown_safe(ss['tparam']) + '** '
+            elif key in ['exceptions', 'details', 'note', 'threadsafety']:
+                md += '<br/>**' + markdown_safe(labels[key]) + '** '
+            elif key == 'blockmath':
+                md += '\n\n$$\n' + remove_padding(markdown_safe(ss['blockmath'])) + '\n$$\n\n'
+            elif key == 'blockcode':
                 md += '\n```c++\n' + \
-                    remove_padding(ss['blockcode']) + '\n```\n'
+                    remove_padding(markdown_safe(ss['blockcode'])) + '\n```\n'
             else:
-                md += '(UNKNOWN ID: {})'.format(ss.items()[0])
+                md += '(UNKNOWN ID: {})'.format(list(ss.items())[0])
     return md
 
 
@@ -37,19 +57,25 @@ def clang_format(code):
     return subprocess.check_output(['clang-format', '-style={BasedOnStyle: llvm, ColumnLimit: 60}'], input=code, encoding='utf-8')
 
 
-def generate_item(index, item, indent=0, item_header=['']):
+def generate_item(index, item, indent=0, item_header=[''], subitem=False):
     md = ''
     p = '    ' * indent
 
-    if 'content' in item:
-        md += p+'!!! info "' + item['name'] + '"\n'
-        indent += 1
-        p = '    ' * indent
+    if not subitem:
+        md += '---\n'
 
-    if item['name'] != item_header[0]:
-        md += p+'## `' + item['name'] + '` ' + item['type'] + '\n\n'
-        item_header[0] = item['name']
-    md += generator.padding('```c++\n' + clang_format(item['definition']) +
+    name = item['name']
+    if re.match(r'\(unnamed.*\)', name):
+        name = '(unnamed)'
+    if re.match(r'\(anonymous.*\)', name):
+        name = '(anonymous)'
+
+    if name != item_header[0]:
+        hdr = '### `' if subitem else '## `'
+        md += p + hdr + name + '` ' + item['type'] + '\n\n'
+        item_header[0] = name
+    if item['type'] not in ['enumerator']:
+        md += generator.padding('```c++\n' + clang_format(item['definition']) +
                             '\n```\n\n', p=p, remove_empty_lines=False) + '\n'
 
     description = item['description']
@@ -61,7 +87,7 @@ def generate_item(index, item, indent=0, item_header=['']):
 
     description = generate_descriptions(description)
     md += generator.padding(description, p=p, remove_empty_lines=False) + '\n\n'
-    if item['type'] not in ['enumerator']:
+    if item['type'] not in ['enumerator'] and item['source'] != "":
         md += p+'??? abstract "Source code"\n'
         md += generator.padding('```c++\n' + item['source'] +
                                 '\n```\n', p=p+'    ', remove_empty_lines=False) + '\n'
@@ -71,7 +97,7 @@ def generate_item(index, item, indent=0, item_header=['']):
         md += '\n\n'
     if 'content' in item:
         for it in item['content']:
-            md += generate_item(index, it, indent, item_header)
+            md += generate_item(index, it, indent, item_header, True)
         md += '\n'
     return md
 
@@ -134,6 +160,9 @@ if __name__ == "__main__":
         g = g or 'default'
         md = generate_group(index,
                             groupItems, (group_names[g] if g in group_names else g))
+        
+        if md.startswith('---\n'):
+            md = md[4:]
 
         wpath = os.path.join(args.output_path, g + '.md')
         print('Writing' + wpath + '...')
