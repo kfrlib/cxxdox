@@ -1,9 +1,8 @@
 FROM alpine:3.20.3
 
 RUN apk update
-RUN apk add --no-cache python3 mkdocs-material py3-regex cmake make g++
+RUN apk add --no-cache python3 mkdocs-material py3-regex py3-requests cmake make g++ git
 RUN apk add --no-cache 'clang19-libs' 'clang19' 'clang19-extra-tools' --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main
-RUN apk add --no-cache git
 
 WORKDIR /opt/clang
 
