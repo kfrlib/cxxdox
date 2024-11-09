@@ -23,6 +23,7 @@ rules = [
     [r'\s*[@\\]code(.*?)\s+[@\\]endcode\s*', 'blockcode', 1],
     [r'\\f\\\((.*?)\\f\\\)', 'inlinemath', 1],
     [r'\\f\$(.*?)\\f\$', 'inlinemath', 1],
+    [r'\$(.*?)\$', 'inlinemath', 1],
     [r'\s*\\f\[(.*?)\\f\]\s*', 'blockmath', 1],
     
     [r'[@\\]concept\s+', 'concept', 0],
