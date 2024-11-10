@@ -280,10 +280,10 @@ def parse(index, root_path, filenames: List[str], clang_args: List[str], macros=
                     tu.cursor.displayname, group, '', macros, include_source)
         print('    Found {} entities'.format(len(index) - count))
 
-def convert_config(c):
+def convert_config(c, config_path):
     if 'masks' in c:
         return {**c, 'input': [{
-                    'include': [ os.path.join(c['input_directory'], x) for x in c['masks'] ],
+                    'include': [ os.path.normpath(os.path.join(os.path.dirname(config_path), c['input_directory'], x)) for x in c['masks'] ],
                     'hide_tokens': c['postprocessor']['ignore'],
                     'compile_options': c['clang']['arguments']}]}
     return c
@@ -330,7 +330,7 @@ if __name__ == '__main__':
 
     config = yaml.safe_load(open(args.config_path, 'r', encoding='utf-8'))
     
-    config = convert_config(config)
+    config = convert_config(config, args.config_path)
 
     print(config)
     config = {**defaults, **config}
