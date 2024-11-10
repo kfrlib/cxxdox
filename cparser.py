@@ -248,9 +248,7 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             parse_index(root_path, index, c, root_location, group, ns, macros)
 
 
-def parse(root_path, filenames: List[str], clang_args: List[str], macros={}, include_source=False):
-
-    index = []
+def parse(index, root_path, filenames: List[str], clang_args: List[str], macros={}, include_source=False):
 
     for filename in filenames:
         print('Parsing ' + filename)
@@ -265,7 +263,8 @@ def parse(root_path, filenames: List[str], clang_args: List[str], macros={}, inc
                 group = os.path.basename(os.path.dirname(filename))
 
         clangIndex = Index.create()
-        tu = clangIndex.parse(None, [filename.replace('\\', '/')] + clang_args)
+        cargs = [filename.replace('\\', '/')] + clang_args
+        tu = clangIndex.parse(None, cargs)
         if not tu:
             print('Unable to load input')
             exit(1)
@@ -281,8 +280,13 @@ def parse(root_path, filenames: List[str], clang_args: List[str], macros={}, inc
                     tu.cursor.displayname, group, '', macros, include_source)
         print('    Found {} entities'.format(len(index) - count))
 
-    return index
-
+def convert_config(c):
+    if 'masks' in c:
+        return {**c, 'input': {
+                    'include': [ os.path.join(c['input_directory'], x) for x in c['masks'] ],
+                    'hide_tokens': c['postprocessor']['ignore'],
+                    'compile_options': c['clang']['arguments']}}
+    return c
 
 if __name__ == '__main__':
 
@@ -291,7 +295,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Parse C++ sources to generate index')
     parser.add_argument('config_path', help='path to configuration file (YML)')
-    parser.add_argument('output_path',
+    parser.add_argument('source_path', help='path to source directory')
+    parser.add_argument('--output',
                         help='path where generated index will be written (JSON)')
     parser.add_argument('--libclang', help='libclang path (.dll or .so)')
     parser.add_argument(
@@ -305,53 +310,59 @@ if __name__ == '__main__':
     clang_args = []
 
     config = None
-    defaults = {'clang': {'arguments': []}, 'repository': '', 'postprocessor': {'ignore': []}, 'masks': [
-        '**/*.hpp', '**/*.cpp', '**/*.cxx', '**/*.hxx', '**/*.h'], 'groups': {}, 'include_source': False}
+
+    defaults = {
+        'inputs': [
+            {
+                'include': ['**/*.hpp', 
+                    '**/*.cpp', 
+                    '**/*.cxx', 
+                    '**/*.hxx', 
+                    '**/*.h'],
+                'hide_tokens': [],
+                'compile_options': [],
+            }
+        ],
+        'repository': '',
+        'groups': {}, 
+        'include_source': False
+    }
 
     config = yaml.safe_load(open(args.config_path, 'r', encoding='utf-8'))
+    
+    config = convert_config(config)
 
     print(config)
     config = {**defaults, **config}
-
-    print('args.config_path: ', args.config_path)
-    print('os.path.dirname(args.config_path): ', os.path.dirname(args.config_path))
-    print('os.path.dirname(args.config_path): ', os.path.join(os.path.dirname(args.config_path), config['input_directory']))
-
-    input_dir = os.path.normpath(os.path.join(os.path.dirname(
-        args.config_path), config['input_directory'])) + os.path.sep
-    print('Input directory:', input_dir)
-
-    clang_args = config['clang']['arguments']
-    print('Clang arguments:', clang_args)
-
-    macros = config['postprocessor']['ignore']
-    print('Ignore macros:', macros)
 
     git_tag = ''
 
     if args.git:
         try:
             git_tag = subprocess.check_output(
-                ['git', 'describe', '--always', '--abbrev=0'], cwd=input_dir).strip()
+                ['git', 'describe', '--always', '--abbrev=0'], cwd=args.source_path).strip()
             git_tag = codecs.decode(git_tag)
             print('GIT:')
             print(git_tag)
         except:
             pass
 
-    file_masks = config['masks']
+    inputs = config['input']
 
-    filenames = []
-    for mask in file_masks:
-        filenames += glob.glob(input_dir + mask, recursive=True)
+    index = []
+    for input in inputs:
+        filenames = []
+        for input_mask in input['include']:
+            filenames += glob.glob(os.path.join(args.source_path, input_mask), recursive=True)
 
-    print('Found', len(filenames), 'files')
+        print('Found', len(filenames), 'files')
 
-    macros = {k: '' for k in macros}
+        macros = input['hide_tokens']
+        macros = {k: '' for k in macros}
+        compile_options = input['compile_options']
 
-    index = cparser.parse(input_dir, filenames, clang_args, macros, config['include_source'])
+        cparser.parse(index, args.source_path, filenames, compile_options, macros, config['include_source'])
 
     index = {'index': index, 'git_tag': git_tag, 'repository': config['repository'].replace(
         '{TAG}', git_tag), 'groups': config['groups']}
-
-    json.dump(index, open(args.output_path, 'w', encoding='utf-8'), indent=4)
+    json.dump(index, open(args.output, 'w', encoding='utf-8'), indent=4)
