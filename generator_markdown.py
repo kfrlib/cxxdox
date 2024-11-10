@@ -29,17 +29,17 @@ def generate_descriptions(s):
             if key in ['concept', 'class', 'struct', 'function', 'typedef', 'enum']:
                 pass # Skip
             elif key == 'inlinecode':
-                md += '`' + ss['inlinecode'] + '`'
+                md += ' `' + ss['inlinecode'] + '` '
             elif key == 'inlinemath':
-                md += '$' + ss['inlinemath'] + '$'
+                md += ' $' + ss['inlinemath'] + '$ '
             elif key == 'param':
-                md += '<br/>Param **' + markdown_safe(ss['param']) + '** '
+                md += '<br/>**Param** `' + markdown_safe(ss['param']) + '` '
             elif key == 'return':
                 md += '<br/>**Returns** '
             elif key == 'see':
                 md += '<br/>**See** '
             elif key == 'tparam':
-                md += '<br/>**' + markdown_safe(ss['tparam']) + '** '
+                md += '<br/>**Template param** `' + markdown_safe(ss['param']) + '` '
             elif key in ['exceptions', 'details', 'note', 'threadsafety']:
                 md += '<br/>**' + markdown_safe(labels[key]) + '** '
             elif key == 'blockmath':
