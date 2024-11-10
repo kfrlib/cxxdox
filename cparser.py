@@ -282,10 +282,10 @@ def parse(index, root_path, filenames: List[str], clang_args: List[str], macros=
 
 def convert_config(c):
     if 'masks' in c:
-        return {**c, 'input': {
+        return {**c, 'input': [{
                     'include': [ os.path.join(c['input_directory'], x) for x in c['masks'] ],
                     'hide_tokens': c['postprocessor']['ignore'],
-                    'compile_options': c['clang']['arguments']}}
+                    'compile_options': c['clang']['arguments']}]}
     return c
 
 if __name__ == '__main__':
