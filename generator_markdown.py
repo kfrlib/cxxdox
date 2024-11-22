@@ -39,7 +39,7 @@ def generate_descriptions(s):
             elif key == 'see':
                 md += '<br/>**See** '
             elif key == 'tparam':
-                md += '<br/>**Template param** `' + markdown_safe(ss['param']) + '` '
+                md += '<br/>**Template param** `' + markdown_safe(ss['tparam']) + '` '
             elif key in ['exceptions', 'details', 'note', 'threadsafety']:
                 md += '<br/>**' + markdown_safe(labels[key]) + '** '
             elif key == 'blockmath':
