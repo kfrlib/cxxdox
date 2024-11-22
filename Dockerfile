@@ -21,6 +21,8 @@ ADD run.sh .
 
 RUN chmod +x run.sh
 
+RUN ls -la /usr/lib/llvm19/lib
+
 ENTRYPOINT ["/bin/sh", "/opt/run.sh"]
 
 CMD [""]
