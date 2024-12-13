@@ -7,7 +7,7 @@ import argparse
 import cparser
 import generator
 import json
-from clang.cindex import Index, CursorKind, Config
+from clang.cindex import Index, CursorKind, Config, Cursor
 import codecs
 import re
 import os
@@ -152,10 +152,10 @@ def source_to_definition(source):
     return source
 
 
-def parse_index(root_path, index: List[Dict], node, root_location, group: str, ns: str = '', macros={}, include_source=False):
+def parse_index(root_path, index: List[Dict], node: Cursor, root_location, group: str, ns: str = '', macros={}, include_source=False):
 
     source = ''
-    if node.brief_comment is not None:
+    if node.brief_comment is not None or node.kind in [CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION]:
         source = get_source(node)
         definition = source_to_definition(replace_macros(source, macros))
 
@@ -187,11 +187,6 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             entity['type'] = 'variable'
             entity['name'] = node.spelling
             entity['definition'] = definition
-        elif node.kind in [CursorKind.NAMESPACE]:
-            entity['type'] = 'namespace'
-            entity['name'] = node.displayname
-            entity['definition'] = definition
-            entity['source'] = definition + ' { ... }'
         elif node.kind in [CursorKind.CONCEPT_DECL]:
             entity['type'] = 'concept'
             entity['name'] = node.displayname
@@ -201,8 +196,6 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             print("ignored: {}".format(node.kind))
             return
         else:
-            print('warning: Unknown cursor kind: {} for {}'.format(
-                node.kind, node.displayname))
             return
 
         entity['qualifiedname'] = re.sub('^::', '', ns + '::' + entity['name'])
@@ -213,8 +206,8 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             entity['source'] = ""
         entity['file'] = os.path.relpath(
             get_location(node), root_path).replace('\\', '/')
-        entity['line'] = get_location_line(node)
-        description = clean_comment(clean_text(node.raw_comment))
+        entity['line'] = get_location_line(node)            
+        description = clean_comment(clean_text(node.raw_comment)) if node.raw_comment is not None else ''
 
         m = re.match(r'[@\\]copybrief\s+([a-zA-Z0-9:\._-]+)',
                      description.strip())
@@ -235,20 +228,20 @@ def parse_index(root_path, index: List[Dict], node, root_location, group: str, n
             index = entity['content']
 
     if node.kind == CursorKind.NAMESPACE:
-        ns += ns+'::'+node.spelling
+        ns += '::'+node.spelling
 
     if node.kind in [CursorKind.CLASS_TEMPLATE, CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL, CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION]:
-        ns += ns+'::'+node.spelling
+        ns += '::'+node.spelling
 
     if node.kind in [CursorKind.ENUM_DECL]:
-        ns += ns+'::'+node.spelling
+        ns += '::'+node.spelling
 
     for c in node.get_children():
         if same_location(get_location(c), root_location):
-            parse_index(root_path, index, c, root_location, group, ns, macros)
+            parse_index(root_path, index, c, root_location, group, ns, macros, include_source)
 
 
-def parse(index, root_path, filenames: List[str], clang_args: List[str], macros={}, include_source=False):
+def parse(index, root_path, filenames: List[str], clang_args: List[str], macros={}, include_source=False, verbose=False):
 
     for filename in filenames:
         print('Parsing ' + filename)
@@ -269,7 +262,7 @@ def parse(index, root_path, filenames: List[str], clang_args: List[str], macros=
             print('Unable to load input')
             exit(1)
 
-        if len(tu.diagnostics):
+        if verbose and len(tu.diagnostics):
             print('------------DIAGNOSTICS---------------')
             for diag in tu.diagnostics:
                 print(diag)
@@ -278,7 +271,8 @@ def parse(index, root_path, filenames: List[str], clang_args: List[str], macros=
         count = len(index)
         parse_index(root_path, index, tu.cursor,
                     tu.cursor.displayname, group, '', macros, include_source)
-        print('    Found {} entities'.format(len(index) - count))
+        if verbose:
+            print('    Found {} entities'.format(len(index) - count))
 
 def convert_config(c, config_path):
     if 'masks' in c:
@@ -301,6 +295,7 @@ if __name__ == '__main__':
     parser.add_argument('--libclang', help='libclang path (.dll or .so)')
     parser.add_argument(
         '--git', help='Retrieve commit hash and branch', action='store_true')
+    parser.add_argument('--verbose', help='Verbose output', action='store_true')
 
     args = parser.parse_args()
 
@@ -324,7 +319,7 @@ if __name__ == '__main__':
             }
         ],
         'repository': '',
-        'groups': {}, 
+        'groups': 'auto', 
         'include_source': False
     }
 
@@ -361,8 +356,8 @@ if __name__ == '__main__':
         macros = {k: '' for k in macros}
         compile_options = input['compile_options']
 
-        cparser.parse(index, args.source_path, filenames, compile_options, macros, config['include_source'])
+        cparser.parse(index, args.source_path, filenames, compile_options, macros, config['include_source'], args.verbose)
 
     index = {'index': index, 'git_tag': git_tag, 'repository': config['repository'].replace(
-        '{TAG}', git_tag), 'groups': config['groups']}
+        '{TAG}', git_tag), 'groups': config['groups'], 'namespace': config['namespace']}
     json.dump(index, open(args.output, 'w', encoding='utf-8'), indent=4)
