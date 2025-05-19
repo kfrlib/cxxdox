@@ -1,13 +1,13 @@
 FROM alpine:3.20.3
 
 RUN apk update
-RUN apk add --no-cache python3 mkdocs-material py3-regex py3-requests py3-colorama py3-pip cmake make g++ git
+RUN apk add --no-cache python3 py3-pip cmake make g++ git
 RUN apk add --no-cache 'clang19-libs' 'clang19' 'clang19-extra-tools' --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main
 
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-RUN pip3 install --no-cache-dir mkdocs-glightbox
+RUN pip3 install --no-cache-dir mkdocs-glightbox mkdocs-material regex requests colorama
 
 WORKDIR /opt/clang
 
