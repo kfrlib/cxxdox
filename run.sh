@@ -16,7 +16,7 @@ cp -a /src/${1}/. /out
 
 export PATH=/usr/lib/llvm19/bin:$PATH
 
-# On Alpine 3.20.3, some libclang symlinks are broken, so using the real path here
+# On Alpine 3.22, some libclang symlinks are broken, so using the real path here
 python3 cparser.py --libclang /usr/lib/llvm19/lib/libclang.so.19.1.* --output /data/cxxindex.json --git /src/${1}/cxxdox.yml /src
 
 python3 generator_markdown.py --refindex /data/cxxindex.json /out/docs --mkdocs /out/mkdocs.yml
