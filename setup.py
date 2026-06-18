@@ -42,7 +42,16 @@ setup(
             'libclang21/libclang.dylib',
             'libclang21/libclang.so.*',
             'libclang21/libclang.*.dll',
+            'libclang21/cindex.py',
             'assets/*',
+        ],
+        'cxxdox_plugin.libclang21': [
+            'libclang.dll',
+            'libclang.so',
+            'libclang.dylib',
+            'libclang.so.*',
+            'libclang.*.dll',
+            'cindex.py',
         ],
     },
     entry_points={
