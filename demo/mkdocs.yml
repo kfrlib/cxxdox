@@ -23,7 +23,7 @@ extra:
   search:
     language: en
 
-copyright: "Copyright &copy; 2025 KFR"
+copyright: "Copyright &copy; 2026 KFR"
 
 plugins:
   - search

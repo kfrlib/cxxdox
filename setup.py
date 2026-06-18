@@ -61,9 +61,8 @@ setup(
     },
     install_requires=[
         'mkdocs>=1.5',
+        'mkdocs-material>=9.1.15',
         'parsimonious',
     ],
-    extras_require={
-        'material': ['mkdocs-material>=9.1.15'],
-    },
+    extras_require={},
 )
