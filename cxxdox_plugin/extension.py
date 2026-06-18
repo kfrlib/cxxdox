@@ -107,11 +107,36 @@ class SymbolLinkProcessor(InlineProcessor):
             root_el.append(brief_el)
         return root_el
 
+    @staticmethod
+    def _is_wrapped_in_code_span(data: str, start: int, end: int) -> bool:
+        # Detect `[[...]]` wrapped in a backtick code span, e.g. `[[...]]` or
+        # `` [[...]] ``, allowing any number of backticks and surrounding spaces.
+        # Look backwards from the match for the opening fence.
+        i = start - 1
+        while i >= 0 and data[i] in ' \t':
+            i -= 1
+        open_len = 0
+        while i >= 0 and data[i] == '`':
+            open_len += 1
+            i -= 1
+        if open_len == 0:
+            return False
+        # Look forwards from the match for the closing fence.
+        j = end
+        while j < len(data) and data[j] in ' \t':
+            j += 1
+        close_len = 0
+        while j < len(data) and data[j] == '`':
+            close_len += 1
+            j += 1
+        return close_len == open_len
+
     def handleMatch(self, m, data):
-        # Skip `[[...]]` that is wrapped in backticks (inline code), e.g. `[[...]]`.
-        # Let the lower-priority backtick processor render it as code instead.
+        # Skip `[[...]]` that is wrapped in backticks (inline code), e.g.
+        # `[[...]]` or `` [[...]] ``. Let the lower-priority backtick processor
+        # render it as code instead.
         start, end = m.start(0), m.end(0)
-        if start > 0 and end < len(data) and data[start - 1] == '`' and data[end] == '`':
+        if self._is_wrapped_in_code_span(data, start, end):
             return None, None, None
         sym_name: str = m.group('name') or ''
         if sym_name.startswith('`') and sym_name.endswith('`'):

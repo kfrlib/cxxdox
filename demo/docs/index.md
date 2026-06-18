@@ -61,26 +61,25 @@ Where `<flag>` is one of: `type`, `file`, `brief`. Wrap a symbol in backticks (`
 
 ### Examples
 
-> [!NOTE]
-> The `[[...]]` syntax below is a CxxDox extension and only renders as links in the generated MkDocs site — not on GitHub. The left column shows the raw syntax to write in your Markdown; the right column shows what it resolves to in the built docs.
+> The `[[...]]` syntax below is a CxxDox extension and only renders as links in the generated MkDocs site — not on GitHub. The middle column shows the raw syntax to write in your Markdown, the right column shows what it resolves to in the built docs.
 
-| Description | Syntax |
-|---|---|
-| Simple reference | `[[ns::Color]]` → [[ns::Color]] |
-| Add the symbol's type | `[[ns::Color:type]]` → [[ns::Color:type]] |
-| Type and source file | `[[ns::Color:type:file]]` → [[ns::Color:type:file]] |
-| Type, brief, and file | `[[ns::Color:type:file:brief]]` → [[ns::Color:type:file:brief]] |
-| Function reference | `[[ns::to_name(Color):type:file:brief]]` → [[ns::to_name(Color):type:file:brief]] |
-| USR-based reference | `` [[`c:@N@ns@Pair`:type:brief]] `` → [[`c:@N@ns@Pair`:type:brief]] |
-| Reference by name | `[[Example]]` → [[Example]] |
-| Reference by signature (backticked) | `` [[`fn1(std::byte, Color)`]] `` → [[`fn1(std::byte, Color)`]] |
-| Reference by name only | `[[fn1]]` → [[fn1]] |
-| Template class | `[[filter<T>]]` → [[filter<T>]] |
-| Template method | `[[filter<T>::apply]]` → [[filter<T>::apply]] |
-| Template method with signature | `` [[`filter<T>::apply(T *, size_t)`]] `` → [[`filter<T>::apply(T *, size_t)`]] |
-| Free function | `[[global_function]]` → [[global_function]] |
-| Specific overload (brief) | `` [[`abs(double)`:brief]] `` → [[`abs(double)`:brief]] |
-| Specific overload (brief) | `` [[`abs(int)`:brief]] `` → [[`abs(int)`:brief]] |
+| Description | Syntax | Result |
+|---|---|---|
+| Simple reference | `[[ns::Color]]` | [[ns::Color]] |
+| Add the symbol's type | `[[ns::Color:type]]` | [[ns::Color:type]] |
+| Type and source file | `[[ns::Color:type:file]]` | [[ns::Color:type:file]] |
+| Type, brief, and file | `[[ns::Color:type:file:brief]]` | [[ns::Color:type:file:brief]] |
+| Function reference | `[[ns::to_name(Color):type:file:brief]]` | [[ns::to_name(Color):type:file:brief]] |
+| USR-based reference | `` [[`c:@N@ns@Pair`:type:brief]] `` | [[`c:@N@ns@Pair`:type:brief]] |
+| Reference by name | `[[Example]]` | [[Example]] |
+| Reference by signature (backticked) | `` [[`fn1(std::byte, Color)`]] `` | [[`fn1(std::byte, Color)`]] |
+| Reference by name only | `[[fn1]]` | [[fn1]] |
+| Template class | `[[filter<T>]]` | [[filter<T>]] |
+| Template method | `[[filter<T>::apply]]` | [[filter<T>::apply]] |
+| Template method with signature | `` [[`filter<T>::apply(T *, size_t)`]] `` | [[`filter<T>::apply(T *, size_t)`]] |
+| Free function | `[[global_function]]` | [[global_function]] |
+| Specific overload (brief) | `` [[`abs(double)`:brief]] `` | [[`abs(double)`:brief]] |
+| Specific overload (brief) | `` [[`abs(int)`:brief]] `` | [[`abs(int)`:brief]] |
 
 ## License
 
