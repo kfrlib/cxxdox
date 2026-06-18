@@ -108,6 +108,11 @@ class SymbolLinkProcessor(InlineProcessor):
         return root_el
 
     def handleMatch(self, m, data):
+        # Skip `[[...]]` that is wrapped in backticks (inline code), e.g. `[[...]]`.
+        # Let the lower-priority backtick processor render it as code instead.
+        start, end = m.start(0), m.end(0)
+        if start > 0 and end < len(data) and data[start - 1] == '`' and data[end] == '`':
+            return None, None, None
         sym_name: str = m.group('name') or ''
         if sym_name.startswith('`') and sym_name.endswith('`'):
             sym_name = sym_name[1:-1]

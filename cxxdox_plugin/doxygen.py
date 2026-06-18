@@ -217,7 +217,9 @@ class DoxygenVisitor(NodeVisitor):
         return {'ingroup': name}
     def visit_anytag(self, node, visited_children):
         _, tagname, _, line_text = visited_children
-        log.warning(f"Unsupported Doxygen tag '@{tagname.text}' in comment: {node.text.strip()!r}")
+        # tagname may already be unwrapped to a str by generic_visit
+        tagname_str = tagname.text.strip() if hasattr(tagname, 'text') else str(tagname).strip()
+        log.warning(f"Unsupported Doxygen tag '@{tagname_str}' in comment: {node.text.strip()!r}")
         return f"{node.text.strip()}"
     def generic_visit(self, node, visited_children):
         return unwrap(visited_children or node)
