@@ -1,0 +1,2 @@
+parsimonious
+mkdocs-material>=9.1.15

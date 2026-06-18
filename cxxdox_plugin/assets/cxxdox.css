@@ -1,0 +1,167 @@
+:root {
+    --var-cxx-color1: #9e2b22;
+    --var-cxx-color2: #635515;
+    --var-cxx-color3: #356015;
+    --var-cxx-color4: #15622e;
+    --var-cxx-color5: #165e64;
+    --var-cxx-color6: #374bb6;
+    --var-cxx-color7: #792cb5;
+    --var-cxx-color8: #992173;
+    --var-cxx-border-color: #cccccc;
+    --var-cxx-label-alpha: 10%;
+    --var-cxx-secondary-color: #787878;
+}
+
+code.cxx-label-class, code.cxx-label-struct, code.cxx-label-union {
+    color: var(--var-cxx-color1);
+    background-color: oklch(from var(--var-cxx-color1) l c h / var(--var-cxx-label-alpha));
+}
+
+code.cxx-label-typedef, code.cxx-label-concept, code.cxx-label-deduction-guide {
+    color: var(--var-cxx-color2);
+    background-color: oklch(from var(--var-cxx-color2) l c h / var(--var-cxx-label-alpha));
+}
+
+code.cxx-label-enum, code.cxx-label-enum-constant {
+    color: var(--var-cxx-color3);
+    background-color: oklch(from var(--var-cxx-color3) l c h / var(--var-cxx-label-alpha));
+}
+
+code.cxx-label-macro {
+    color: var(--var-cxx-color4);
+    background-color: oklch(from var(--var-cxx-color4) l c h / var(--var-cxx-label-alpha));
+}
+
+code.cxx-label-namespace {
+    color: var(--var-cxx-color5);
+    background-color: oklch(from var(--var-cxx-color5) l c h / var(--var-cxx-label-alpha));
+}
+
+code.cxx-label-function, code.cxx-label-constructor, code.cxx-label-destructor, code.cxx-label-operator {
+    color: var(--var-cxx-color6);
+    background-color: oklch(from var(--var-cxx-color6) l c h / var(--var-cxx-label-alpha));
+}
+
+code.cxx-label-variable {
+    color: var(--var-cxx-color7);
+    background-color: oklch(from var(--var-cxx-color7) l c h / var(--var-cxx-label-alpha));
+}
+
+.cxx-label-enum, .cxx-label-function, .cxx-label-constructor, .cxx-label-destructor, .cxx-label-operator,
+.cxx-label-class, .cxx-label-struct, .cxx-label-union,
+.cxx-label-namespace, .cxx-label-variable, .cxx-label-typedef, .cxx-label-macro, .cxx-label-concept,
+.cxx-label-deduction-guide, .cxx-label-enum-constant {
+    font-weight: bold;
+    font-size: 0.85em;
+}
+
+.cxx-contents {
+    padding: 0 1.6em;
+    border: 1px solid var(--var-cxx-border-color);
+    border-top: none;
+    border-bottom: none;
+}
+
+.cxx-location {
+    font-size: 0.85em;
+    color: var(--var-cxx-secondary-color);
+}
+
+.highlight a {
+    text-decoration: underline;
+    text-decoration-color: var(--var-cxx-secondary-color);
+    text-underline-offset: 0.1rem;
+}
+
+.highlight a:hover {
+    text-decoration-color: rgba(10, 53, 128, 1.0);
+    color: #0610DD;
+}
+
+.highlight a:hover span {
+    color: inherit;
+}
+
+.cxx-param, .cxx-tparam {
+    margin-left: 2.4em;
+}
+
+h1:target,
+h2:target,
+h3:target,
+h4:target,
+h5:target,
+h6:target {
+    font-weight: bold;
+}
+
+table.cxx-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 0.5em;
+}
+
+table.cxx-table caption {
+    caption-side: top;
+    text-align: left;
+    font-weight: bold;
+    margin-bottom: 0em;
+    font-size: 1.1em;
+}
+
+table.cxx-table td {
+    border: none;
+    padding: 0.25em;
+    vertical-align: top;
+}
+
+table.cxx-table td:first-child {
+    width: 20%;
+    font-weight: bold;
+    padding-left: 1.5em;
+}
+
+code.cxx-not-found {
+    color: red;
+    border-bottom: 2px dotted red;
+}
+
+.cxx-inline-brief {
+    font-style: italic;
+    color: #777;
+}
+
+.cxx-symbol-name {
+    font-weight: bold;
+}
+
+.cxx-missing-symbol {
+    color: red;
+}
+
+.cxx-group {
+    font-size: 0.75rem;
+    color: #444;
+    border-radius: 1em;
+    padding: 0.2em 0.6em;
+    background-color: #F0F5FA;
+    display: inline-block;
+    margin: 0 0.5em;
+    vertical-align: middle;
+}
+
+[data-md-color-scheme=slate] {
+    --var-cxx-label-alpha: 20%;
+    --var-cxx-border-color: #545454;
+    --var-cxx-secondary-color: #787878;
+
+}
+
+[data-md-color-scheme=slate] .cxx-group {
+    background-color: #262f38;
+    color: #dfdede;
+}
+
+.cxx-groups {
+    text-align: right;
+}

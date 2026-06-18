@@ -1,0 +1,20 @@
+__pycache__
+clang
+output.json
+build
+site
+.DS_Store
+.vscode
+*.pyc
+.cache
+*.egg-info
+*.pch
+out.json
+
+# libclang binaries are extracted from the official libclang PyPI package
+# during the CI wheel build (see .github/workflows/build.yml). Do not commit.
+libclang.dll
+libclang.so
+libclang.dylib
+libclang.*.dll
+libclang.so.*

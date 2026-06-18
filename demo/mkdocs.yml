@@ -1,0 +1,87 @@
+site_name: CxxDox Demo
+theme:
+  name: "material"
+  features:
+    - navigation.tabs
+    - navigation.top
+    - content.code.copy
+    - navigation.indexes
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra:
+  search:
+    language: en
+
+copyright: "Copyright &copy; 2025 KFR"
+
+plugins:
+  - search
+  - privacy
+  - cxxdox:
+      title: Demo library Reference
+      path_prefix: auto/
+      symbol_prefixes:
+        - ns
+        - ns::inl
+      input:
+        - include:
+          - library.hpp # relative to mkdocs.yml
+          exclude: []
+          exclude_symbols: 
+            - '*excluded_function()*'
+          hide_tokens:
+            - ALWAYS_INLINE
+          compile_options:
+            - -std=c++20
+            - -DMACRO=1
+
+markdown_extensions:
+  - attr_list
+  - admonition
+  - footnotes
+  - meta
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.details
+  - pymdownx.magiclink
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_javascript:
+  - js/math.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js
+
+extra_css:
+  - https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css
+
+repo_url: https://github.com/kfrlib/cxxdox
+repo_name: CxxDox
+
+validation:
+  links:
+    absolute_links: relative_to_docs
+
+nav:
+  - Home: index.md
+  - Library Reference:
+    - Demo Library: auto/index.md
