@@ -10,7 +10,7 @@ except FileNotFoundError:
 
 setup(
     name='mkdocs-cxxdox',
-    version='0.1.4',
+    version='0.1.5',
     description='MkDocs plugin that generates C++ API documentation from source using libclang.',
     long_description=long_description,
     long_description_content_type='text/markdown',
