@@ -105,7 +105,6 @@ class Index:
         self.files[filename] = tokens
 
     def add_symbol(self, id: str, data: dict):
-        # Update existing dict with new data
         if id in self.symbols:
             # Overwrite if previous one wasn't definition but this one is
             if not self.symbols[id].get('is_definition', False) and data.get('is_definition', False):
@@ -145,7 +144,6 @@ class Index:
         best_depth = -1
         name = wrap_name(name)
 
-        # for prefix in prefixes:
         for id, sym in self.symbols.items():
             def test_symbol(full_name: str) -> bool:
                 if not full_name.endswith(name):

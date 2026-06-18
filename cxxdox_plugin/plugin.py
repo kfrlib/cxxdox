@@ -81,8 +81,6 @@ def plural(t: str) -> str:
 class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
     css_filename: str = "assets/cxxdox.css"
 
-    # config.path_prefix: str = "cxxdox/"
-
     index: Index
     doc_pages: dict[str, DocPage]
     groups: set[str]
@@ -97,13 +95,12 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
     def _map_symbols_to_pages(self, files: Files):
         names: dict[str,dict[str,str]] = {}
         def unique_name(id, name: str) -> str:
-            if name not in names: # name is free
-                names[name] = {id: name} # map id to name
+            if name not in names:
+                names[name] = {id: name}
                 return name
             d = names[name]
             if id in d:
-                return d[id] # already mapped
-            # find unique name within d
+                return d[id]
             i = 1
             while True:
                 new_name = f"{name}~{i}"
@@ -122,10 +119,8 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                 parent_type = parent_sym.get('type', 'unknown')
                 if SymbolType(parent_type) in SymbolType.classlike():
                     type = 'member-' + type
-            # Replace any problematic characters in full_name
             uri = full_name.lower()
             uri = re.sub(r'[^a-z0-9_\.]+', '.', uri)
-            # remove trailing and leading dots
             uri = uri.strip('.')
             uri = f"{plural(type)}/{uri}"
             return unique_name(id, uri)
@@ -140,7 +135,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                 return id
             return find_top_level_parent(parent_id)
 
-        all = self.index.all_symbols() # sorted by ids to ensure deterministic order
+        all = self.index.all_symbols()
 
         for id in all:
             sym = self.index[id]
@@ -327,13 +322,11 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         dest_parts = urlparse(dest)
         src_parts = urlparse(src)
 
-        # Strip fragments for path calculation
         src_path = PurePosixPath(src_parts.path)
         dest_path = PurePosixPath(dest_parts.path)
 
         rel_path = dest_path.relative_to(src_path.parent) if src_path != dest_path else PurePosixPath('.')
 
-        # Append fragment if exists
         if dest_parts.fragment:
             rel_path = f"{rel_path}#{dest_parts.fragment}"
 
@@ -343,7 +336,6 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         if '*' in abs_path:
             abs_path = abs_path.replace('*', self.config.path_prefix)
         if self.current_uri is not None:
-            # Make relative path from current page to target (using unix separators)
             result = os.path.relpath(abs_path, start=os.path.dirname(self.current_uri)).replace('\\', '/')
             return result
         return abs_path

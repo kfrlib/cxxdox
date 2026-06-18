@@ -6,8 +6,6 @@ from cxxdox_plugin.index import Index, CxxToken, CxxTokenType
 from .libclang21.cindex import TokenKind, Token, CursorKind, SourceRange, Cursor, TranslationUnit, SourceLocation, AccessSpecifier, Config as ClangConfig
 from cxxdox_plugin.doxygen import escape
 
-# CursorKind.COMPOUND_STMT
-
 def cursor_to_symbol_id(cursor: Cursor) -> str|None:
     if cursor is None or cursor.is_null():
         return None
@@ -26,7 +24,6 @@ def to_cxx_tokens(tokens: Iterator[Token], source: bytes, indent: int = 0) -> li
     last_pos = None
     for t in tokens:
         if last_pos is not None:
-            # insert whitespace between tokens if needed
             if t.extent.start.offset > last_pos:
                 gap = source[last_pos : t.extent.start.offset]
                 gap = gap.replace(b'\r\n', b'\n')

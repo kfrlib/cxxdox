@@ -9,7 +9,7 @@ from typing import Tuple
 
 from cxxdox_plugin.index import CxxToken, CxxTokenType
 from cxxdox_plugin.highlight import to_cxx_tokens
-from .libclang21.cindex import Index as ClangIndex, FileInclusion, File, CursorKind, SourceRange, Cursor, TokenGroup, TranslationUnit, SourceLocation, AccessSpecifier, Config as ClangConfig
+from .libclang21.cindex import Index as ClangIndex, CursorKind, SourceRange, Cursor, TokenGroup, TranslationUnit, SourceLocation, AccessSpecifier, Config as ClangConfig
 from cxxdox_plugin.doxygen import parse_doxygen_comment
 from .logs import log
 from .index import *
@@ -53,7 +53,6 @@ def map_cursor_to_symbol_type(cursor: Cursor) -> SymbolType|None:
     elif cursor.kind == CursorKind.MACRO_DEFINITION:
         return SymbolType.MACRO
     elif cursor.kind == CursorKind.UNEXPOSED_DECL:
-        # Hack:
         decl_ptr = cursor.data[0]  # pointer to Decl
         if not decl_ptr:
             raise ValueError("Decl pointer is NULL")
@@ -168,9 +167,7 @@ class Parser:
     
     @staticmethod
     def _read_source(file_name: str) -> Source:
-        # Canonicalize path
         file_name = path.abspath(file_name)
-        # Load from cache or read file
         if file_name in Parser.source_cache:
             return Parser.source_cache[file_name]
         else:
@@ -331,17 +328,6 @@ class Parser:
         added_symbols = self.index.symbol_count - saved_symbols
         log.info(f'Added {added_symbols} symbols from {file_path}')
 
-        # inc = self.translation_unit.get_includes()
-        # print('Inclusions:')
-        # for inclusion in inc:
-        #     # print(inclusion.__dict__)
-        #     file: File = inclusion.include
-        #     print(f'  Included file: {file.name}')
-        #     # if filename not in self.index.files:
-        #     #     tokens = Parser._extract_file_source(self.translation_unit, filename)
-        #     #     if tokens is not None:
-        #     #         self.index.add_file(filename, tokens)
-
     def parse_glob(self, include_patterns: list[str], exclude_patterns: list[str], root_dir: str):
         files = []
         for pattern in include_patterns:
@@ -362,7 +348,6 @@ class Parser:
             if isinstance(item, str):
                 brief = item.strip()
                 if brief:
-                    # remove the brief from the doc
                     doc.remove(item)
                     return brief, doc
             elif isinstance(item, dict) and 'brief' in item:

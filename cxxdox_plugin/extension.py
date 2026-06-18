@@ -39,25 +39,12 @@ class CxxSnippetProcessor(BlockProcessor):  # --8<-- "cxx:library.hpp"
         if match:
             if match.start() > 0:
                 self.parser.parseBlocks(parent, [block[: match.start()]])
-            # removes the first line
             block = block[match.end():]
             
             block, the_rest = self.detab(block)
 
             filename = match["filename"]
 
-            # tokens = Parser._extract_file_source(None, filename)
-            # if tokens is None:
-            #     log.warning(f"CxxDox source file not found: {filename}")
-            #     return
-            
-            # html_source = cxx_tokens_to_html(tokens, self.index, ignore=set())
-            # el = Element('pre')
-            # codeEl = Element('code')
-            # codeEl.text = self.md.htmlStash.store(html_source)
-            # el.append(codeEl)
-            # parent.append(el)
-        
             if the_rest:
                 # This block contained unindented line(s) after the first indented
                 # line. Insert these lines as the first block of the master blocks
@@ -164,7 +151,6 @@ class CxxDoxProcessor(BlockProcessor):
         has_source = 'source' in sym and sym['source']
         children = self.index.lookup_children(sym_id)
 
-        # extract hash from permalink
         link = self.index.symbol_permalink(sym_id)
         hash = ''
         if link is not None and '#' in link:
@@ -227,7 +213,6 @@ class CxxDoxProcessor(BlockProcessor):
         if match:
             if match.start() > 0:
                 self.parser.parseBlocks(parent, [block[: match.start()]])
-            # removes the first line
             block = block[match.end():]
             
         block, the_rest = self.detab(block)

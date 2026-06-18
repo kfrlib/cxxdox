@@ -217,6 +217,7 @@ class DoxygenVisitor(NodeVisitor):
         return {'ingroup': name}
     def visit_anytag(self, node, visited_children):
         _, tagname, _, line_text = visited_children
+        log.warning(f"Unsupported Doxygen tag '@{tagname.text}' in comment: {node.text.strip()!r}")
         return f"{node.text.strip()}"
     def generic_visit(self, node, visited_children):
         return unwrap(visited_children or node)
@@ -407,14 +408,11 @@ def doxygen_to_html(block: list|str,
                     html_parts.append(f'<div class="cxx-details">{wrap_p(doxygen_to_html(item["details"], index, context, link_resolver))}</div>')
                 elif 'code' in item:
                     html_parts.append(f'<pre><code class="language-cpp">{escape(item["code"])}</code></pre>')
-                elif 'ingroup' in item:
+                elif 'ingroup' in item or 'addtogroup' in item:
                     pass
-                    # html_parts.append(f'<div class="cxx-ingroup">Part of group: <code>{escape(item["ingroup"])}</code></div>')
-                elif 'addtogroup' in item:
-                    pass
-                    # ag = item['addtogroup']
-                    # html_parts.append(f'<div class="cxx-addtogroup"><h4>Group: <code>{escape(ag["name"])}</code> {escape(ag["title"])}</h4>{wrap_p(doxygen_to_html(ag["desc"], index, context, link_resolver))}</div>')
                 else:
+                    unhandled_key = next(iter(item.keys())) if isinstance(item, dict) and item else None
+                    log.warning(f"Unhandled Doxygen tag '{unhandled_key}' in doxygen_to_html (context: {context}): {item!r}")
                     html_parts.append(escape(str(item)))
     if table:
         html_parts.append('</table>')
@@ -427,4 +425,3 @@ r"""@brief This is a demo library to showcase documentation features.
 """)
 
     print(json.dumps(data, indent=4))
-    # print(doxygen_to_html(data, Index(), ''))
