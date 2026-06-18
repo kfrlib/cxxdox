@@ -159,42 +159,16 @@ jobs:
           ls -la wheelhouse/
           for w in wheelhouse/*.whl; do echo "  $w"; done
 
-      # Smoke-test the wheel in a clean venv before uploading it. This catches
-      # packaging bugs early: bad platform tags (pip refuses to install),
-      # missing bundled libclang, broken imports, or missing entry points.
-      # Runs on the same runner that built the wheel, so the platform tag
-      # must match the host — which is exactly what we want to validate.
-      - name: Test-install wheel in a clean venv
+      # Smoke-test the wheel before uploading it. This catches packaging bugs
+      # early
+      - name: Test-install wheel
         shell: bash
         run: |
           set -euo pipefail
-          python -m venv /tmp/wheel-test-venv
-          source /tmp/wheel-test-venv/bin/activate
-          python -m pip install --upgrade pip
           # Install the wheel WITH deps (mkdocs, parsimonious, ...) to make
           # sure install_requires resolves and the plugin loads.
-          pip install wheelhouse/*.whl
-          # Import the package and verify the bundled libclang binary is
-          # present inside the installed package.
-          python - <<'PY'
-          import importlib, os, sys
-          import cxxdox_plugin
-          pkg_dir = os.path.dirname(cxxdox_plugin.__file__)
-          print("cxxdox_plugin installed at:", pkg_dir)
-          lc_dir = os.path.join(pkg_dir, "libclang21")
-          print("libclang21 contents:", os.listdir(lc_dir))
-          binaries = [f for f in os.listdir(lc_dir)
-                      if f.startswith("libclang.") and not f.endswith(".py")]
-          assert binaries, "no libclang binary shipped in the wheel!"
-          print("bundled libclang binary:", binaries)
-          # Verify the mkdocs plugin entry point is registered.
-          from importlib.metadata import entry_points
-          eps = entry_points(group="mkdocs.plugins")
-          names = [ep.name for ep in eps]
-          assert "cxxdox" in names, f"cxxdox entry point missing; got {names}"
-          print("mkdocs.plugins entry points:", names)
-          print("OK: wheel installs and loads cleanly on", sys.platform)
-          PY
+          python -m pip install wheelhouse/*.whl
+          python "${GITHUB_WORKSPACE}/.github/workflows/smoke_test.py"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
