@@ -161,3 +161,61 @@ jobs:
           files: wheels/*.whl
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  pages:
+    name: Build & publish demo to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    # Build the demo site from the main branch and from tagged releases.
+    # Pages deployment requires the repo to have Pages enabled with the
+    # "GitHub Actions" source in Settings → Pages.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      pages: write        # required to deploy to Pages
+      id-token: write     # required to use the Pages deployment action
+      contents: read
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build wheel setuptools
+
+      - name: Download built wheel (Linux x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-manylinux_x86_64
+          path: wheelhouse
+
+      - name: Install plugin from wheel + demo deps
+        run: |
+          # Install the freshly built wheel (bundles libclang.so for Linux).
+          pip install wheelhouse/mkdocs_cxxdox-*.whl
+          # Material theme + extras used by demo/mkdocs.yml.
+          pip install 'mkdocs-material>=9.1.15'
+
+      - name: Build demo site
+        working-directory: demo
+        run: mkdocs build --clean
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo/site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
