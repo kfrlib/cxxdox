@@ -59,7 +59,8 @@ jobs:
                   "arch": "x64",
                   "wheel_tag": "manylinux_x86_64",
                   "llvm_asset": f"LLVM-{v}-Linux-X64.tar.xz",
-                  "libclang_in_archive": f"LLVM-{v}-Linux-X64/lib/libclang.so",
+                  # Linux release ships a versioned soname, e.g. libclang.so.21.1.6
+                  "libclang_in_archive": f"LLVM-{v}-Linux-X64/lib/libclang.so.{v}",
                   "staged_name": "libclang.so",
               },
               # Additional OS/archs can be added here (e.g. ubuntu-arm, macos-latest).
@@ -106,12 +107,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p llvm-extract
-          # Extract only the libclang member to keep this step fast
-          # (the full archive is ~1-2 GB).
-          tar -xJf llvm.tar.xz -C llvm-extract "${{ matrix.libclang_in_archive }}"
-          found="$(find llvm-extract -type f \( -name 'libclang.dll' -o -name 'libclang.so*' -o -name 'libclang.dylib' \) | head -n1)"
+          tar -xJf llvm.tar.xz --wildcards -C llvm-extract "*/${{ matrix.staged_name }}*"
+          found="$(find llvm-extract -type f -name '${{ matrix.staged_name }}*' | head -n1)"
           test -n "$found" || { echo "libclang not found after extraction"; exit 1; }
-          echo "Found: $found"
           echo "libclang_path=$found" >> "$GITHUB_ENV"
 
       - name: Stage libclang binary into package
