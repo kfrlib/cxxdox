@@ -57,7 +57,11 @@ jobs:
               {
                   "os": "ubuntu-latest",
                   "arch": "x64",
-                  "wheel_tag": "manylinux_x86_64",
+                  # NOTE: must be a PEP 600 tag with a glibc version —
+                  # bare `manylinux_x86_64` is NOT recognized by pip and
+                  # wheels tagged with it fail to install. manylinux_2_17
+                  # (glibc 2.17 / CentOS 7) is the most broadly compatible.
+                  "wheel_tag": "manylinux_2_17_x86_64",
                   "llvm_asset": f"LLVM-{v}-Linux-X64.tar.xz",
                   # Linux release ships a versioned soname, e.g. libclang.so.21.1.6
                   "libclang_in_archive": f"LLVM-{v}-Linux-X64/lib/libclang.so.{v}",
@@ -133,9 +137,16 @@ jobs:
       - name: Retag wheel with platform tag
         shell: bash
         run: |
+          # --platform-tag replaces the wheel's platform tag set, so the
+          # default `any` is dropped automatically (no need for --remove).
+          # `wheel tags` writes a new file but leaves the original on disk,
+          # so we must delete the `any` wheel ourselves — otherwise the
+          # upload-artifact glob below picks up both, and the mis-tagged
+          # `any` wheel would still collide across platforms in the release.
           python -m wheel tags \
             --platform-tag '${{ matrix.wheel_tag }}' \
             wheelhouse/*.whl
+          rm -f wheelhouse/*-any.whl
           ls -la wheelhouse/
 
       - name: Check wheel metadata
@@ -147,6 +158,43 @@ jobs:
         run: |
           ls -la wheelhouse/
           for w in wheelhouse/*.whl; do echo "  $w"; done
+
+      # Smoke-test the wheel in a clean venv before uploading it. This catches
+      # packaging bugs early: bad platform tags (pip refuses to install),
+      # missing bundled libclang, broken imports, or missing entry points.
+      # Runs on the same runner that built the wheel, so the platform tag
+      # must match the host — which is exactly what we want to validate.
+      - name: Test-install wheel in a clean venv
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/wheel-test-venv
+          source /tmp/wheel-test-venv/bin/activate
+          python -m pip install --upgrade pip
+          # Install the wheel WITH deps (mkdocs, parsimonious, ...) to make
+          # sure install_requires resolves and the plugin loads.
+          pip install wheelhouse/*.whl
+          # Import the package and verify the bundled libclang binary is
+          # present inside the installed package.
+          python - <<'PY'
+          import importlib, os, sys
+          import cxxdox_plugin
+          pkg_dir = os.path.dirname(cxxdox_plugin.__file__)
+          print("cxxdox_plugin installed at:", pkg_dir)
+          lc_dir = os.path.join(pkg_dir, "libclang21")
+          print("libclang21 contents:", os.listdir(lc_dir))
+          binaries = [f for f in os.listdir(lc_dir)
+                      if f.startswith("libclang.") and not f.endswith(".py")]
+          assert binaries, "no libclang binary shipped in the wheel!"
+          print("bundled libclang binary:", binaries)
+          # Verify the mkdocs plugin entry point is registered.
+          from importlib.metadata import entry_points
+          eps = entry_points(group="mkdocs.plugins")
+          names = [ep.name for ep in eps]
+          assert "cxxdox" in names, f"cxxdox entry point missing; got {names}"
+          print("mkdocs.plugins entry points:", names)
+          print("OK: wheel installs and loads cleanly on", sys.platform)
+          PY
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -223,7 +271,7 @@ jobs:
       - name: Download built wheel (Linux x64)
         uses: actions/download-artifact@v4
         with:
-          name: wheel-manylinux_x86_64
+          name: wheel-manylinux_2_17_x86_64
           path: wheelhouse
 
       - name: Install plugin from wheel + demo deps
