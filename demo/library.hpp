@@ -85,9 +85,9 @@ namespace ns
      *
      * @param color The Color enum value.
      * @return A string view representing the color name.
-     * @retval "Red"   For @ref Color::Red.
-     * @retval "Green" For @ref Color::Green.
-     * @retval "Blue"  For @ref Color::Blue.
+     * @retval "Red"   For Color::Red.
+     * @retval "Green" For Color::Green.
+     * @retval "Blue"  For Color::Blue.
      * @retval "Unknown" For any invalid value.
      */
     inline constexpr std::string_view to_name(Color color) noexcept
