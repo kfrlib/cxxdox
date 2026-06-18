@@ -135,9 +135,7 @@ jobs:
         run: |
           python -m wheel tags \
             --platform-tag '${{ matrix.wheel_tag }}' \
-            --remove any \
             wheelhouse/*.whl
-          # wheel tags writes a new file and removes the old one; verify.
           ls -la wheelhouse/
 
       - name: Check wheel metadata
@@ -188,6 +186,16 @@ jobs:
     # Pages deployment requires the repo to have Pages enabled with the
     # "GitHub Actions" source in Settings → Pages.
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+
+    # Pushing a tag that sits on main triggers two workflow runs at once
+    # (one for the branch push, one for the tag push). Both would deploy to
+    # the same Pages environment and race. This concurrency group ensures
+    # only one Pages deployment runs at a time; the later-triggered run
+    # cancels the earlier one. Content is identical because the tag points
+    # at the same commit as main, so it doesn't matter which wins.
+    concurrency:
+      group: pages
+      cancel-in-progress: true
 
     permissions:
       pages: write        # required to deploy to Pages
