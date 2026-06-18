@@ -14,21 +14,21 @@ mkdocs-cxxdox ships as a platform-specific wheel that bundles the matching `libc
 
 Download the latest wheel from the [GitHub Releases page](https://github.com/kfrlib/cxxdox/releases):
 
-| Platform            | Wheel tag                |
-|---------------------|--------------------------|
-| Windows x64         | `mkdocs_cxxdox-*-win_amd64.whl`   |
-| Linux x64           | `mkdocs_cxxdox-*-manylinux_x86_64.whl` |
+| Platform    | Wheel tag                                       |
+|-------------|-------------------------------------------------|
+| Windows x64 | `mkdocs_cxxdox-*-py3-none-win_amd64.whl`        |
+| Linux x64   | `mkdocs_cxxdox-*-py3-none-manylinux_x86_64.whl` |
 
 ### 2. Install with pip
 
 ```bash
-pip install https://github.com/kfrlib/cxxdox/releases/download/v0.1.4/mkdocs_cxxdox-0.1.4-win_amd64.whl
+pip install https://github.com/kfrlib/cxxdox/releases/download/v0.1.4/mkdocs_cxxdox-0.1.4-py3-none-win_amd64.whl
 ```
 
 Replace the URL/version with the one matching your platform from the release assets. You can also download the file and install locally:
 
 ```bash
-pip install mkdocs_cxxdox-0.1.4-cp312-none-win_amd64.whl
+pip install mkdocs_cxxdox-0.1.4-py3-none-win_amd64.whl
 ```
 
 ### 3. (Recommended) Install the Material theme
@@ -38,7 +38,7 @@ The plugin works with any MkDocs theme, but it is designed for and tested with [
 ```bash
 pip install "mkdocs-cxxdox[material]"
 # or, if installing from a wheel file:
-pip install mkdocs_cxxdox-0.1.4-win_amd64.whl "mkdocs-material>=9.1.15"
+pip install mkdocs_cxxdox-0.1.4-py3-none-win_amd64.whl "mkdocs-material>=9.1.15"
 ```
 
 ### Requirements
@@ -88,25 +88,25 @@ All options live under the `cxxdox:` plugin key in `mkdocs.yml`.
 
 ### Top-level options
 
-| Option            | Type       | Default                  | Description                                                                 |
-|-------------------|------------|--------------------------|-----------------------------------------------------------------------------|
-| `title`           | `str`      | `"CxxDox Documentation"`  | Title shown on the generated index pages.                                  |
-| `input`           | list       | **required**              | List of input groups (see below). Each group is a `SubConfig`.             |
-| `path_prefix`     | `str`      | `"cxxdox/"`               | Directory under `docs/` where generated pages are placed. Use `auto/` to let the plugin derive it. |
-| `symbol_prefixes` | list[str]  | `[]`                      | Only emit symbols whose qualified name starts with one of these prefixes (e.g. `ns`, `ns::inl`). |
-| `root`            | `dir`      | `.`                       | Root directory used to resolve relative `include`/`exclude` paths.        |
+| Option            | Type      | Default                  | Description                                                                                        |
+|-------------------|-----------|--------------------------|----------------------------------------------------------------------------------------------------|
+| `title`           | `str`     | `"CxxDox Documentation"` | Title shown on the generated index pages.                                                          |
+| `input`           | list      | **required**             | List of input groups (see below). Each group is a `SubConfig`.                                     |
+| `path_prefix`     | `str`     | `"cxxdox/"`              | Directory under `docs/` where generated pages are placed. Use `auto/` to let the plugin derive it. |
+| `symbol_prefixes` | list[str] | `[]`                     | Only emit symbols whose qualified name starts with one of these prefixes (e.g. `ns`, `ns::inl`).   |
+| `root`            | `dir`     | `.`                      | Root directory used to resolve relative `include`/`exclude` paths.                                 |
 
 ### Input group options (`input[i]`)
 
 Each entry in `input` is a sub-config with:
 
-| Option              | Type       | Default | Description                                                                 |
-|---------------------|------------|---------|-----------------------------------------------------------------------------|
-| `include`           | list[str]  | —       | Glob patterns of files to parse (relative to `root`). **Required.**         |
-| `exclude`           | list[str]  | `[]`    | Glob patterns of files to skip.                                             |
-| `exclude_symbols`   | list[str]  | `[]`    | Glob patterns of symbol spellings to omit from the docs (e.g. `'*excluded_function()*'`). |
-| `compile_options`   | list[str]  | `[]`    | Extra clang arguments (e.g. `-std=c++17`, `-Iinclude`, `-DMACRO=1`).        |
-| `hide_tokens`       | list[str]  | `[]`    | Preprocessor tokens to hide from rendered source (e.g. `ALWAYS_INLINE`).   |
+| Option            | Type      | Default | Description                                                                               |
+|-------------------|-----------|---------|-------------------------------------------------------------------------------------------|
+| `include`         | list[str] | —       | Glob patterns of files to parse (relative to `root`). **Required.**                       |
+| `exclude`         | list[str] | `[]`    | Glob patterns of files to skip.                                                           |
+| `exclude_symbols` | list[str] | `[]`    | Glob patterns of symbol spellings to omit from the docs (e.g. `'*excluded_function()*'`). |
+| `compile_options` | list[str] | `[]`    | Extra clang arguments (e.g. `-std=c++17`, `-Iinclude`, `-DMACRO=1`).                      |
+| `hide_tokens`     | list[str] | `[]`    | Preprocessor tokens to hide from rendered source (e.g. `ALWAYS_INLINE`).                  |
 
 ### Full example
 

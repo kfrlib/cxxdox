@@ -9,13 +9,13 @@
 mkdocs-cxxdox ships as a platform-specific wheel that bundles the matching `libclang` binary — no system LLVM/Clang install is required.
 
 ```bash
-pip install https://github.com/kfrlib/cxxdox/releases/download/v0.1.4/mkdocs_cxxdox-0.1.4-win_amd64.whl
+pip install https://github.com/kfrlib/cxxdox/releases/download/v0.1.4/mkdocs_cxxdox-0.1.4-py3-none-win_amd64.whl
 ```
 
 For the best experience, pair it with the [Material](https://squidfunk.github.io/mkdocs-material/) theme:
 
 ```bash
-pip install mkdocs_cxxdox-0.1.4-win_amd64.whl "mkdocs-material>=9.1.15"
+pip install mkdocs_cxxdox-0.1.4-py3-none-win_amd64.whl "mkdocs-material>=9.1.15"
 ```
 
 Requirements: Python ≥ 3.9, `mkdocs` ≥ 1.5.
@@ -63,23 +63,23 @@ Where `<flag>` is one of: `type`, `file`, `brief`. Wrap a symbol in backticks (`
 
 > The `[[...]]` syntax below is a CxxDox extension and only renders as links in the generated MkDocs site — not on GitHub. The middle column shows the raw syntax to write in your Markdown, the right column shows what it resolves to in the built docs.
 
-| Description | Syntax | Result |
-|---|---|---|
-| Simple reference | `[[ns::Color]]` | [[ns::Color]] |
-| Add the symbol's type | `[[ns::Color:type]]` | [[ns::Color:type]] |
-| Type and source file | `[[ns::Color:type:file]]` | [[ns::Color:type:file]] |
-| Type, brief, and file | `[[ns::Color:type:file:brief]]` | [[ns::Color:type:file:brief]] |
-| Function reference | `[[ns::to_name(Color):type:file:brief]]` | [[ns::to_name(Color):type:file:brief]] |
-| USR-based reference | `` [[`c:@N@ns@Pair`:type:brief]] `` | [[`c:@N@ns@Pair`:type:brief]] |
-| Reference by name | `[[Example]]` | [[Example]] |
-| Reference by signature (backticked) | `` [[`fn1(std::byte, Color)`]] `` | [[`fn1(std::byte, Color)`]] |
-| Reference by name only | `[[fn1]]` | [[fn1]] |
-| Template class | `[[filter<T>]]` | [[filter<T>]] |
-| Template method | `[[filter<T>::apply]]` | [[filter<T>::apply]] |
-| Template method with signature | `` [[`filter<T>::apply(T *, size_t)`]] `` | [[`filter<T>::apply(T *, size_t)`]] |
-| Free function | `[[global_function]]` | [[global_function]] |
-| Specific overload (brief) | `` [[`abs(double)`:brief]] `` | [[`abs(double)`:brief]] |
-| Specific overload (brief) | `` [[`abs(int)`:brief]] `` | [[`abs(int)`:brief]] |
+| Description                         | Syntax                                    | Result                                 |
+|-------------------------------------|-------------------------------------------|----------------------------------------|
+| Simple reference                    | `[[ns::Color]]`                           | [[ns::Color]]                          |
+| Add the symbol's type               | `[[ns::Color:type]]`                      | [[ns::Color:type]]                     |
+| Type and source file                | `[[ns::Color:type:file]]`                 | [[ns::Color:type:file]]                |
+| Type, brief, and file               | `[[ns::Color:type:file:brief]]`           | [[ns::Color:type:file:brief]]          |
+| Function reference                  | `[[ns::to_name(Color):type:file:brief]]`  | [[ns::to_name(Color):type:file:brief]] |
+| USR-based reference                 | `` [[`c:@N@ns@Pair`:type:brief]] ``       | [[`c:@N@ns@Pair`:type:brief]]          |
+| Reference by name                   | `[[Example]]`                             | [[Example]]                            |
+| Reference by signature (backticked) | `` [[`fn1(std::byte, Color)`]] ``         | [[`fn1(std::byte, Color)`]]            |
+| Reference by name only              | `[[fn1]]`                                 | [[fn1]]                                |
+| Template class                      | `[[filter<T>]]`                           | [[filter<T>]]                          |
+| Template method                     | `[[filter<T>::apply]]`                    | [[filter<T>::apply]]                   |
+| Template method with signature      | `` [[`filter<T>::apply(T *, size_t)`]] `` | [[`filter<T>::apply(T *, size_t)`]]    |
+| Free function                       | `[[global_function]]`                     | [[global_function]]                    |
+| Specific overload (brief)           | `` [[`abs(double)`:brief]] ``             | [[`abs(double)`:brief]]                |
+| Specific overload (brief)           | `` [[`abs(int)`:brief]] ``                | [[`abs(int)`:brief]]                   |
 
 ## License
 
