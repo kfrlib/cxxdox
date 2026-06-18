@@ -124,6 +124,24 @@ jobs:
       - name: Build wheel
         run: |
           python -m pip wheel . --no-deps -w wheelhouse/
+
+      # The package is pure-Python, so setuptools tags every wheel as
+      # `py3-none-any`. But each wheel bundles a platform-specific libclang
+      # binary, so it must carry a real platform tag — otherwise the Windows
+      # and Linux wheels end up with identical filenames and clobber each
+      # other when artifacts are merged for the release.
+      - name: Retag wheel with platform tag
+        shell: bash
+        run: |
+          python -m wheel tags \
+            --platform-tag '${{ matrix.wheel_tag }}' \
+            --remove any \
+            wheelhouse/*.whl
+          # wheel tags writes a new file and removes the old one; verify.
+          ls -la wheelhouse/
+
+      - name: Check wheel metadata
+        run: |
           python -m twine check wheelhouse/*.whl
 
       - name: List built wheels
