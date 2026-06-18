@@ -2,7 +2,7 @@
 # Single source of truth for the package version.
 # Bump with:  bump-my-version bump <part>   (part = patch | minor | major)
 # This updates every file listed below, commits, and tags v<new_version>.
-current_version = "0.1.2"
+current_version = "0.1.3"
 commit = true
 tag = true
 tag_name = "v{new_version}"
