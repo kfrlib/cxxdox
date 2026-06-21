@@ -9,13 +9,13 @@
 mkdocs-cxxdox ships as a platform-specific wheel that bundles the matching `libclang` binary — no system LLVM/Clang install is required.
 
 ```bash
-pip install https://github.com/kfrlib/cxxdox/releases/download/v0.1.5/mkdocs_cxxdox-0.1.5-py3-none-win_amd64.whl
+pip install https://github.com/kfrlib/cxxdox/releases/download/v0.1.6/mkdocs_cxxdox-0.1.6-py3-none-win_amd64.whl
 ```
 
 For the best experience, pair it with the [Material](https://squidfunk.github.io/mkdocs-material/) theme:
 
 ```bash
-pip install mkdocs_cxxdox-0.1.5-py3-none-win_amd64.whl "mkdocs-material>=9.1.15"
+pip install mkdocs_cxxdox-0.1.6-py3-none-win_amd64.whl "mkdocs-material>=9.1.15"
 ```
 
 Requirements: Python ≥ 3.9, `mkdocs` ≥ 1.5.
