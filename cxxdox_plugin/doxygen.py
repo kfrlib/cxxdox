@@ -28,6 +28,13 @@ doxygen_grammar = Grammar(
     _ws                  = ~r"[^\S\n]"
     _newline             = _ws* "\n" _ws*
     _word_text           = ~r"\S+" / ~r"\".*\""
+    # REFWORD mirroring Doxygen's grammar (src/doctokenizer.l): an optional
+    # leading "::"/"#", a sequence of identifiers (with optional template
+    # arguments) separated by "::"/"#"/"."/"-"/"/", an optional function
+    # argument list "(...)" with an optional const/volatile suffix. Trailing
+    # punctuation such as ';', ',', '.' (sentence end) is NOT consumed, so it
+    # stays as plain text -- matching how Doxygen tokenizes \ref <name>.
+    _ref_word            = ~r"(?:#|::)?[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?(?:(?:::|#|\.|-|/)[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?)*(?:\((?:[^()]|\([^()]*\))*\)(?:[ \t]*(?:const|volatile))?)?" / ~r"\".*\""
     _tag_start           = "@" / "\\"
     _line_text           = ~r"[^\n]+"
     _paragraph_text      = ~r"([^@\\\$\n]|\n(?!\n))+"
@@ -47,7 +54,7 @@ doxygen_grammar = Grammar(
     b                    = _tag_start "b" _ws+ _word_text
     p                    = _tag_start "p" _ws+ _word_text
     c                    = _tag_start "c" _ws+ _word_text
-    ref                  = _tag_start "ref" _ws+ _word_text
+    ref                  = _tag_start "ref" _ws+ _ref_word
     formula              = _tag_start "f[" _formula_content _tag_start "f]"
     md_formula           = "$" ~r"(?s).*?(?=\$|$)" "$"
     inline_formula1      = _tag_start "f$" _inline_formula1_content _tag_start "f$"
@@ -63,22 +70,22 @@ doxygen_grammar = Grammar(
     note                 = _tag_start "note" _opt_paragraph
     see                  = _tag_start ("sa" / "see") _opt_paragraph
     code                 = _tag_start "code" _ws* _code_content _tag_start "endcode"
-    copybrief            = _tag_start "copybrief" _ws+ _word_text
+    copybrief            = _tag_start "copybrief" _ws+ _ref_word
     remark               = _tag_start ("remarks" / "remark") _opt_paragraph
     warning              = _tag_start "warning" _opt_paragraph
-    copydoc              = _tag_start "copydoc" _ws+ _word_text
-    enum                 = _tag_start "enum" _ws+ _word_text
-    class                = _tag_start "class" _ws+ _word_text
-    struct               = _tag_start "struct" _ws+ _word_text
+    copydoc              = _tag_start "copydoc" _ws+ _ref_word
+    enum                 = _tag_start "enum" _ws+ _ref_word
+    class                = _tag_start "class" _ws+ _ref_word
+    struct               = _tag_start "struct" _ws+ _ref_word
     pre                  = _tag_start "pre" _opt_paragraph
     post                 = _tag_start "post" _opt_paragraph
     exception            = _tag_start ("exceptions" / "exception" / "throws" / "throw") _ws* _word_text _opt_paragraph
     since                = _tag_start "since" _opt_paragraph
     version              = _tag_start "version" _opt_paragraph
     deprecated           = _tag_start "deprecated" _opt_paragraph
-    typedef              = _tag_start "typedef" _ws+ _word_text
-    addtogroup           = _tag_start ("addtogroup" / "defgroup") _ws+ _word_text _ws* _line_text* _opt_paragraph
-    ingroup              = _tag_start "ingroup" _ws+ _word_text
+    typedef              = _tag_start "typedef" _ws+ _ref_word
+    addtogroup           = _tag_start ("addtogroup" / "defgroup") _ws+ _ref_word _ws* _line_text* _opt_paragraph
+    ingroup              = _tag_start "ingroup" _ws+ _ref_word
 
     # Fallback
     anytag               = _tag_start ~r"\S+" _ws* _line_text*
@@ -145,6 +152,8 @@ class DoxygenVisitor(NodeVisitor):
         _, _, paragraph = visited_children
         return {'post': unwrap(paragraph)}
     def visit__word_text(self, node, visited_children):
+        return node.text.strip().strip('"')
+    def visit__ref_word(self, node, visited_children):
         return node.text.strip().strip('"')
     def visit_exception(self, node, visited_children):
         _, _, _, exc_name, paragraph = visited_children
