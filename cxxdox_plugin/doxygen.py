@@ -24,7 +24,7 @@ doxygen_grammar = Grammar(
     _section             = brief / details / param / tparam / return / retval / note / see / code /
                            copybrief / remark / warning / copydoc / enum / class / struct / 
                            pre / post / exception / since / version / deprecated /
-                           typedef / addtogroup / ingroup / _paragraph / anytag 
+                           typedef / _paragraph / anytag 
     _ws                  = ~r"[^\S\n]"
     _newline             = _ws* "\n" _ws*
     _word_text           = ~r"\S+" / ~r"\".*\""
@@ -84,8 +84,6 @@ doxygen_grammar = Grammar(
     version              = _tag_start "version" _opt_paragraph
     deprecated           = _tag_start "deprecated" _opt_paragraph
     typedef              = _tag_start "typedef" _ws+ _ref_word
-    addtogroup           = _tag_start ("addtogroup" / "defgroup") _ws+ _ref_word _ws* _line_text* _opt_paragraph
-    ingroup              = _tag_start "ingroup" _ws+ _ref_word
 
     # Fallback
     anytag               = _tag_start ~r"\S+" _ws* _line_text*
@@ -218,12 +216,6 @@ class DoxygenVisitor(NodeVisitor):
         return {'ref': word}
     def visit__section(self, node, visited_children):
         return unwrap(visited_children[0])
-    def visit_addtogroup(self, node, visited_children):
-        _, _, _, name, _, title, paragraph = visited_children
-        return {'addtogroup': {'name': name, 'title': title, 'desc': unwrap(paragraph)}}
-    def visit_ingroup(self, node, visited_children):
-        _, _, _, name = visited_children
-        return {'ingroup': name}
     def visit_anytag(self, node, visited_children):
         _, tagname, _, line_text = visited_children
         # tagname may already be unwrapped to a str by generic_visit
@@ -419,8 +411,6 @@ def doxygen_to_html(block: list|str,
                     html_parts.append(f'<div class="cxx-details">{wrap_p(doxygen_to_html(item["details"], index, context, link_resolver))}</div>')
                 elif 'code' in item:
                     html_parts.append(f'<pre><code class="language-cpp">{escape(item["code"])}</code></pre>')
-                elif 'ingroup' in item or 'addtogroup' in item:
-                    pass
                 else:
                     unhandled_key = next(iter(item.keys())) if isinstance(item, dict) and item else None
                     log.warning(f"Unhandled Doxygen tag '{unhandled_key}' in doxygen_to_html (context: {context}): {item!r}")

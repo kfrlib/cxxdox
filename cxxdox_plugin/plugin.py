@@ -70,6 +70,13 @@ class DocPage:
     id: str
     full: bool = False
 
+@dataclass
+class DocGroup:
+    id: str
+    title: str
+    description: str # Markdown description of the group, if any
+    condition: Any
+
 def plural(t: str) -> str:
     if t.endswith('y'):
         return t[:-1] + 'ies'
@@ -83,16 +90,21 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
     index: Index
     doc_pages: dict[str, DocPage]
-    groups: set[str]
+    groups: list[DocGroup]
     current_uri: str|None
 
     def __init__(self):
         self.index = Index()
         self.doc_pages = {}
         self.current_uri = None
-        self.groups = set()
+        self.groups = [
+            DocGroup('default', 'Default Group', '', None)
+        ]
 
     def _map_symbols_to_pages(self, files: Files):
+        """
+        Assigns symbols to groups, and documentation pages. Generates unique permalinks for each symbol.
+        """
         names: dict[str,dict[str,str]] = {}
         def unique_name(id, name: str) -> str:
             if name not in names:
@@ -109,7 +121,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                     return new_name
                 i += 1                
 
-        def gen_uri(id, sym: dict) -> str:
+        def gen_uri(id: str, sym: dict, group: str) -> str:
             full_name = sym.get('full_name', '')
             type = sym.get('type', 'unknown')
             type = type.replace('struct', 'class').replace('union', 'class')
@@ -122,7 +134,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             uri = full_name.lower()
             uri = re.sub(r'[^a-z0-9_\.]+', '.', uri)
             uri = uri.strip('.')
-            uri = f"{plural(type)}/{uri}"
+            uri = f"{group}/{plural(type)}/{uri}"
             return unique_name(id, uri)
 
         def find_top_level_parent(id: str) -> str:
@@ -139,14 +151,18 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         for id in all:
             sym = self.index[id]
-            if group := sym.get('group', ''):
-                self.groups.add(group)
+            group: str = 'default'
+            for g in self.groups:
+                if g.condition and g.condition(sym):
+                    group = g.id
+                    break
+
             top_level_parent_id = find_top_level_parent(id)
             top_level_sym = self.index[top_level_parent_id]
             if top_level_parent_id == id:
-                self.index.set_permalink(id, f"{self.config.path_prefix}{gen_uri(id, sym)}.md")
+                self.index.set_permalink(id, f"{self.config.path_prefix}{gen_uri(id, sym, group)}.md")
             else:
-                self.index.set_permalink(id, f"{self.config.path_prefix}{gen_uri(top_level_parent_id, top_level_sym)}.md#{gen_uri(id, sym)}")
+                self.index.set_permalink(id, f"{self.config.path_prefix}{gen_uri(top_level_parent_id, top_level_sym, group)}.md#{gen_uri(id, sym, group)}")
 
             page = self.doc_pages.setdefault(top_level_parent_id, DocPage(top_level_parent_id, full=sym.get('type') != SymbolType.NAMESPACE.value))
 
@@ -206,13 +222,14 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         return markdown
 
-    def _generate_index(self, title: str, self_type: list[str], parent_type: list[str|None]) -> str:
-        sym_ids = self.index.lookup_by_type(self_type, parent_type)
+    def _generate_index(self, title: str, self_type: list[str], parent_type: list[str|None], group: str|None = None) -> str:
+        sym_ids = self.index.lookup_by_type(self_type, parent_type, group=group)
         return self._generate_list(title, sym_ids)
 
     def on_files(self, files: Files, /, *, config: MkDocsConfig):
 
         generated_nav = []
+
         def add_nav(full_uri: str, title: str):
             uri = full_uri.removeprefix(self.config.path_prefix)
             nav_path_parts = PurePosixPath(uri).parent.parts
@@ -235,29 +252,45 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         if self.groups:
             log.info('Generating groups...')
 
+            # Per-type index pages that should be replicated under each group.
+            # The first entry (the project-wide "All Symbols" page) is excluded.
+            per_group_index_pages = index_pages[1:]
+
             groups_list = low_rank + "# Groups\n\n"
-            for group in sorted(self.groups):
-                groups_list += f"- [{group}]({group}.md)\n"
-                group_desc = ''
-                group_title = group
-                if group_info := Parser.per_group_doc.get(group):
-                    if title := group_info.get('title', ''):
-                        group_title = title
-                        groups_list += title + '\n\n'
-                    if desc := group_info.get('desc', ''):
-                        group_desc = doxygen_to_html(desc, self.index, '', self.link_resolver) + '\n\n'
+            for group in self.groups:
+                group_title, group_desc = "Default title", "Default description"
+                groups_list += f"- [{group_title}]({group.id}/index.md)\n"
 
-                log.info(f"Generating group page: {self.config.path_prefix}groups/{group}.md")
-                self.current_uri = f"{self.config.path_prefix}groups/{group}.md"
-                files.append(File.generated(config, f"{self.config.path_prefix}groups/{group}.md", content=self._generate_list(f"Group: {group}", self.index.lookup_group(group), group_desc)))
-                add_nav(f"{self.config.path_prefix}groups/{group}.md", group_title)
+                log.info(f"Generating group page: {self.config.path_prefix}{group.id}/index.md")
+                self.current_uri = f"{self.config.path_prefix}{group.id}/index.md"
+                # The group's main index page carries the human-readable
+                # title plus the description, so the per-group sub-pages
+                # (variables, classes, ...) can stay focused on their
+                # own headings.
+                files.append(File.generated(config, f"{self.config.path_prefix}{group.id}/index.md", content=self._generate_list(group_title, self.index.lookup_group(group.id), group_desc)))
+                add_nav(f"{self.config.path_prefix}{group.id}/index.md", group_title)
 
-            files.append(File.generated(config, f"{self.config.path_prefix}groups/index.md", content=groups_list))
-            add_nav(f"{self.config.path_prefix}groups/index.md", "Groups")
+                # Per-group per-type sub-pages (e.g. demo/variables/index.md)
+                for page in per_group_index_pages:
+                    group_page_uri = f"{self.config.path_prefix}{group.id}/{page.name}"
+                    log.info(f"Generating group index page: {group_page_uri} ({page.title})")
+                    self.current_uri = group_page_uri
+                    files.append(File.generated(config, group_page_uri, content=low_rank+self._generate_index(page.title, page.self_type, page.parent_type, group=group.id)))
+                    add_nav(group_page_uri, page.title)
 
-        log.info('Generating index pages...')
+            files.append(File.generated(config, f"{self.config.path_prefix}groups.md", content=groups_list))
+            add_nav(f"{self.config.path_prefix}groups.md", "Groups")
 
-        for page in index_pages:
+        log.info('Generating project-wide index pages...')
+
+        # Per-type index pages are normally generated per-group inside
+        # {group_name}/. If no groups exist, fall back to project-wide
+        # per-type pages so non-grouped projects still have them.
+        project_wide_pages = [index_pages[0]]  # "All Symbols" is always project-wide
+        if not self.groups:
+            project_wide_pages += index_pages[1:]
+
+        for page in project_wide_pages:
             log.info(f"Generating index page: {self.config.path_prefix+page.name} ({page.title})")
             self.current_uri = self.config.path_prefix + page.name
             files.append(File.generated(config, f"{self.config.path_prefix+page.name}", content=low_rank+self._generate_index(page.title, page.self_type, page.parent_type)))

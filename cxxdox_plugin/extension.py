@@ -199,7 +199,7 @@ class CxxDoxProcessor(BlockProcessor):
             group_a_el.set('href', self.link_resolver(f'*groups/{group}.md'))
             group_a_el.set('title', f'Group: {group}')
             h_el.append(group_a_el)
-            
+
         parent.append(h_el)
 
         if has_source:

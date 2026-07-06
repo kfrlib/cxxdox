@@ -9,7 +9,7 @@ from typing import Tuple
 
 from cxxdox_plugin.index import CxxToken, CxxTokenType
 from cxxdox_plugin.highlight import to_cxx_tokens
-from .libclang21.cindex import Index as ClangIndex, CursorKind, SourceRange, Cursor, TokenGroup, TranslationUnit, SourceLocation, AccessSpecifier, Config as ClangConfig
+from .libclang21.cindex import Index as ClangIndex, CursorKind, SourceRange, Cursor, Token, TokenGroup, TokenKind, TranslationUnit, SourceLocation, AccessSpecifier, Config as ClangConfig
 from cxxdox_plugin.doxygen import parse_doxygen_comment
 from .logs import log
 from .index import *
@@ -100,7 +100,6 @@ def cursor_as_dict(cursor):
 @dataclass
 class Source:
     content: bytes
-    group: str|None
 
 class Parser:
     clang_args: list[str]
@@ -112,7 +111,6 @@ class Parser:
     ignored_symbol_patterns: list[str]
 
     per_file_doc: dict[str, dict] = {}
-    per_group_doc: dict[str, dict] = {}
     source_cache: dict[str, Source] = {} # Class variable to cache file contents
 
     def __init__(self, index: Index, clang_args: list[str] = [], ignored_file_patterns: list[str] = [], 
@@ -174,77 +172,18 @@ class Parser:
             contents: bytes = b''
             with open(file_name, 'rb') as f:
                 contents = f.read()
-            Parser.source_cache[file_name] = Source(contents, Parser._parse_file_doc(contents))
+            Parser.source_cache[file_name] = Source(contents)
             return Parser.source_cache[file_name]
-    
+
     @staticmethod
     def _extract_file_source(translation_unit: TranslationUnit, file_name: str) -> list[CxxToken]|None:
         source = Parser._read_source(file_name).content
+        file = translation_unit.get_file(file_name)
         tokens = TokenGroup.get_tokens(translation_unit, SourceRange.from_locations(
-            SourceLocation.from_offset(translation_unit, file_name, 0),
-            SourceLocation.from_offset(translation_unit, file_name, len(source))))
+            SourceLocation.from_offset(translation_unit, file, 0),
+            SourceLocation.from_offset(translation_unit, file, len(source))))
         result = to_cxx_tokens(tokens, source)
         return result
-    
-    @staticmethod
-    def _extract_symbol_group(cursor: Cursor) -> str|None:
-        if cursor.is_null():
-            return None
-        if raw_comment := cursor.raw_comment:
-            raw_comment = raw_comment.strip()
-            m = re.search(r'[@\\]ingroup\s+([^\s]+)', raw_comment)
-            if m:
-                return m.group(1)
-        
-        if cursor.semantic_parent is not None:
-            return Parser._extract_symbol_group(cursor.semantic_parent)
-        else:
-            return None
-        
-    @staticmethod
-    def _parse_file_doc(contents: bytes) -> str|None:
-        if contents.find(b'addtogroup') == -1:
-            return None
-        source = contents.decode('utf-8', errors='ignore')
-
-        file_group = None
-
-        # find all comments: sequences of //... and /*...*/ in source:
-        comments = re.findall(r"""
-(?:
-    //[^\n]*(?:\n[ \t]*//[^\n]*)*       # consecutive // comments
-  |
-    /\*[^*]*\*+(?:[^/*][^*]*\*+)*/     # /* ... */ block comments
-)
-""", source, re.VERBOSE)
-
-        for comment in comments:
-            comment = comment.replace('\r\n', '\n')
-            if doc := Parser._extract_doc(comment):
-                for item in doc:
-                    if isinstance(item, dict) and 'addtogroup' in item:
-                        Parser.per_group_doc[item['addtogroup']['name']] = item['addtogroup']
-                        file_group = item['addtogroup']['name']
-                        return item['addtogroup']['name']
-        return file_group
-
-    @staticmethod
-    def _extract_group(cursor: Cursor) -> str|None:
-        if group := Parser._extract_symbol_group(cursor):
-            return group
-        
-        extent: SourceRange = cursor.extent
-        start: SourceLocation = extent.start
-        end: SourceLocation = extent.end
-        if start.file is None or end.file is None:
-            log.warning(f'Warning: Extent has no associated file: {cursor.spelling}')
-            return None
-        if start.file.name != end.file.name:
-            log.warning(f'Warning: Extent spans multiple files: {cursor.spelling}')
-            return None
-        file_name = start.file.name
-        source = Parser._read_source(file_name)
-        return source.group
 
     @staticmethod
     def _extract_source(cursor: Cursor) -> list[CxxToken]|None:
@@ -406,10 +345,7 @@ class Parser:
                 symbol_dict['line'] = cursor.location.line
 
                 if src := Parser._extract_source(cursor):
-                    symbol_dict['source'] = src
-                
-                if group := Parser._extract_group(cursor):
-                    symbol_dict['group'] = group
+                    symbol_dict['source'] = src                
 
             if doc := Parser._extract_doc(cursor.raw_comment):
                 brief, details = Parser._split_brief(doc)

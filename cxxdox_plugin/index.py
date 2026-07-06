@@ -174,7 +174,7 @@ class Index:
 
         return best_match
 
-    def lookup_by_type(self, self_type: list[str], parent_type: list[str|None] = [None]) -> list[str]:
+    def lookup_by_type(self, self_type: list[str], parent_type: list[str|None] = [None], group: str|None = None) -> list[str]:
         result = []
         for id, sym in self.symbols.items():
             if sym.get('type') in self_type:
@@ -184,6 +184,10 @@ class Index:
                         continue
                 elif self.symbols.get(parent_id, {}).get('type') not in parent_type:
                     continue
+                if group is not None:
+                    sym_group = sym.get('group') or 'default'
+                    if sym_group != group:
+                        continue
                 result.append(id)
         return result
 
@@ -197,7 +201,8 @@ class Index:
     def lookup_group(self, group: str) -> list[str]:
         result = []
         for id, sym in self.symbols.items():
-            if sym.get('group') == group:
+            sym_group = sym.get('group') or 'default'
+            if sym_group == group:
                 result.append(id)
         return result
 

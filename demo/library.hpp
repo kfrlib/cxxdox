@@ -10,10 +10,6 @@
 /// @brief A global function that is not part of any namespace.
 void global_function() {}
 
-/// @addtogroup demo Demo Group
-/// This is a @b demo library to showcase documentation features.
-/// @{
-
 /// @brief Library version
 /// @version 1.0.0
 /// @since Initial release
@@ -22,16 +18,6 @@ void global_function() {}
 // Namespace for the demo library
 namespace ns
 {
-
-    /// @ingroup inheritance
-    struct Base
-    {
-    };
-
-    /// @ingroup inheritance
-    struct Derived : public Base
-    {
-    };
 
     /// @brief A free function in the ns namespace.
     void free_function(int x);
@@ -150,7 +136,6 @@ namespace ns
      * Doxygen-style comments.
      * @note This is a note about the Example class.
      * @warning This is a warning about the Example class.
-     * @ingroup example
      * @class Example
      * @copydoc Example::multiply
      */
