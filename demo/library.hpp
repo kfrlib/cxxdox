@@ -7,6 +7,8 @@
 #include <string_view>
 #include <utility>
 
+#include "header.hpp"
+
 /// @brief A global function that is not part of any namespace.
 void global_function() {}
 

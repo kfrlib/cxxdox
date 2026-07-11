@@ -70,14 +70,7 @@ class DocPage:
     id: str
     full: bool = False
 
-@dataclass
-class DocGroup:
-    id: str
-    title: str
-    description: str # Markdown description of the group, if any
-    condition: Any
-
-def plural(t: str) -> str:
+def _plural(t: str) -> str:
     if t.endswith('y'):
         return t[:-1] + 'ies'
     elif t.endswith('s') or t.endswith('x') or t.endswith('z') or t.endswith('ch') or t.endswith('sh'):
@@ -90,16 +83,23 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
     index: Index
     doc_pages: dict[str, DocPage]
-    groups: list[DocGroup]
     current_uri: str|None
 
     def __init__(self):
         self.index = Index()
         self.doc_pages = {}
         self.current_uri = None
-        self.groups = [
-            DocGroup('default', 'Default Group', '', None)
-        ]
+        
+    def _symbol_type_slug(self, sym) -> str:
+        type = sym.get('type', 'unknown')
+        type = type.replace('struct', 'class').replace('union', 'class')
+        parent = sym.get('parent', None)
+        if parent is not None:
+            parent_sym = self.index[parent]
+            parent_type = parent_sym.get('type', 'unknown')
+            if SymbolType(parent_type) in SymbolType.classlike():
+                type = 'member-' + type
+        return _plural(type)
 
     def _map_symbols_to_pages(self, files: Files):
         """
@@ -123,18 +123,12 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         def gen_uri(id: str, sym: dict, group: str) -> str:
             full_name = sym.get('full_name', '')
-            type = sym.get('type', 'unknown')
-            type = type.replace('struct', 'class').replace('union', 'class')
-            parent = sym.get('parent', None)
-            if parent is not None:
-                parent_sym = self.index[parent]
-                parent_type = parent_sym.get('type', 'unknown')
-                if SymbolType(parent_type) in SymbolType.classlike():
-                    type = 'member-' + type
             uri = full_name.lower()
             uri = re.sub(r'[^a-z0-9_\.]+', '.', uri)
             uri = uri.strip('.')
-            uri = f"{group}/{plural(type)}/{uri}"
+            uri = f"{self._symbol_type_slug(sym)}/{uri}"
+            if group:
+                uri = group + '/' + uri
             return unique_name(id, uri)
 
         def find_top_level_parent(id: str) -> str:
@@ -152,10 +146,14 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         for id in all:
             sym = self.index[id]
             group: str = 'default'
-            for g in self.groups:
-                if g.condition and g.condition(sym):
-                    group = g.id
-                    break
+            if sym.get('type', None) == SymbolType.NAMESPACE.value:
+                group = '' # Namespaces are not tied to a file or group
+            else:
+                for g in self.config.groups:
+                    if g.matches(sym.get('file', '')):
+                        group = g.id
+                        break
+            sym.setdefault('group', group)
 
             top_level_parent_id = find_top_level_parent(id)
             top_level_sym = self.index[top_level_parent_id]
@@ -222,25 +220,30 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         return markdown
 
-    def _generate_index(self, title: str, self_type: list[str], parent_type: list[str|None], group: str|None = None) -> str:
+    def _generate_index(self, title: str, self_type: list[str], parent_type: list[str|None], group: str|None = None) -> str | None:
         sym_ids = self.index.lookup_by_type(self_type, parent_type, group=group)
+        if not sym_ids:
+            return None
         return self._generate_list(title, sym_ids)
 
     def on_files(self, files: Files, /, *, config: MkDocsConfig):
 
         generated_nav = []
 
-        def add_nav(full_uri: str, title: str):
-            uri = full_uri.removeprefix(self.config.path_prefix)
-            nav_path_parts = PurePosixPath(uri).parent.parts
-
+        def add_nav(nav_path: list[str], full_uri: str):
             branch = generated_nav
-            for part in nav_path_parts:
-                part = name_mapping.get(part, part)
-                branch = find_or_create_node(branch, part)
+            for part in nav_path[:-1]:
+                new_branch = find_or_create_node(branch, part)
+                if isinstance(new_branch, str):
+                    for item in branch:
+                        if isinstance(item, dict) and part in item:
+                            item[part] = [new_branch]
+                            new_branch = item[part]
+                            break
+                branch = new_branch
 
-            branch.append({title: full_uri})
-        
+            branch.append({nav_path[-1]: full_uri}) # type: ignore[list-item]
+
         log.info('Generating symbol permalinks...')
         self._map_symbols_to_pages(files)
 
@@ -249,57 +252,62 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         with open('out.json', 'w') as f:
             json.dump(self.index.dump(), f, indent='\t', sort_keys=True, default=lambda o: o.as_dict() if hasattr(o, 'as_dict') else str(o))
 
-        if self.groups:
-            log.info('Generating groups...')
+        log.info('Generating groups...')
 
-            # Per-type index pages that should be replicated under each group.
-            # The first entry (the project-wide "All Symbols" page) is excluded.
-            per_group_index_pages = index_pages[1:]
+        # Per-type index pages that should be replicated under each group.
+        # The first entry (the project-wide "All Symbols" page) is excluded.
+        # The namespaces page is also excluded because namespaces are not
+        # tied to a file or group, so they only make sense project-wide.
+        per_group_index_pages = index_pages[2:]
 
-            groups_list = low_rank + "# Groups\n\n"
-            for group in self.groups:
-                group_title, group_desc = "Default title", "Default description"
-                groups_list += f"- [{group_title}]({group.id}/index.md)\n"
+        for group in self.config.groups:
+            log.info(f"Generating group page: {self.config.path_prefix}{group.id}/index.md")
+            self.current_uri = f"{self.config.path_prefix}{group.id}/index.md"
+            # The group's main index page carries the human-readable
+            # title plus the description, so the per-group sub-pages
+            # (variables, classes, ...) can stay focused on their
+            # own headings.
+            files.append(File.generated(config, f"{self.config.path_prefix}{group.id}/index.md", content=self._generate_list(group.title, self.index.lookup_group(group.id), group.description)))
+            add_nav([group.title], f"{self.config.path_prefix}{group.id}/index.md")
 
-                log.info(f"Generating group page: {self.config.path_prefix}{group.id}/index.md")
-                self.current_uri = f"{self.config.path_prefix}{group.id}/index.md"
-                # The group's main index page carries the human-readable
-                # title plus the description, so the per-group sub-pages
-                # (variables, classes, ...) can stay focused on their
-                # own headings.
-                files.append(File.generated(config, f"{self.config.path_prefix}{group.id}/index.md", content=self._generate_list(group_title, self.index.lookup_group(group.id), group_desc)))
-                add_nav(f"{self.config.path_prefix}{group.id}/index.md", group_title)
-
-                # Per-group per-type sub-pages (e.g. demo/variables/index.md)
-                for page in per_group_index_pages:
-                    group_page_uri = f"{self.config.path_prefix}{group.id}/{page.name}"
-                    log.info(f"Generating group index page: {group_page_uri} ({page.title})")
-                    self.current_uri = group_page_uri
-                    files.append(File.generated(config, group_page_uri, content=low_rank+self._generate_index(page.title, page.self_type, page.parent_type, group=group.id)))
-                    add_nav(group_page_uri, page.title)
-
-            files.append(File.generated(config, f"{self.config.path_prefix}groups.md", content=groups_list))
-            add_nav(f"{self.config.path_prefix}groups.md", "Groups")
+            # Per-group per-type sub-pages (e.g. demo/variables/index.md)
+            for page in per_group_index_pages:
+                group_page_uri = f"{self.config.path_prefix}{group.id}/{page.name}"
+                log.info(f"Generating group index page: {group_page_uri} ({page.title})")
+                self.current_uri = group_page_uri
+                content = self._generate_index(page.title, page.self_type, page.parent_type, group=group.id)
+                if content is None:
+                    log.info(f"Skipping empty group index page: {group_page_uri} ({page.title})")
+                    continue
+                files.append(File.generated(config, group_page_uri, content=low_rank+content))
+                add_nav([group.title, page.title], group_page_uri)
 
         log.info('Generating project-wide index pages...')
 
         # Per-type index pages are normally generated per-group inside
         # {group_name}/. If no groups exist, fall back to project-wide
         # per-type pages so non-grouped projects still have them.
-        project_wide_pages = [index_pages[0]]  # "All Symbols" is always project-wide
-        if not self.groups:
-            project_wide_pages += index_pages[1:]
+        # "All Symbols" and "Namespaces" are always project-wide because
+        # namespaces are not scoped to a file or group.
+        project_wide_pages = index_pages[:2]  # "All Symbols" and "Namespaces"
 
         for page in project_wide_pages:
             log.info(f"Generating index page: {self.config.path_prefix+page.name} ({page.title})")
             self.current_uri = self.config.path_prefix + page.name
-            files.append(File.generated(config, f"{self.config.path_prefix+page.name}", content=low_rank+self._generate_index(page.title, page.self_type, page.parent_type)))
-            add_nav(self.config.path_prefix+page.name, page.title)
+            content = self._generate_index(page.title, page.self_type, page.parent_type)
+            if content is None:
+                log.info(f"Skipping empty index page: {self.config.path_prefix+page.name} ({page.title})")
+                continue
+            files.append(File.generated(config, f"{self.config.path_prefix+page.name}", content=low_rank+content))
+            add_nav([page.title], self.config.path_prefix+page.name)
 
         log.info('Generating symbol pages...')
 
         for id, page in self.doc_pages.items():
             sym = self.index[id]
+            group_id = sym.get('group', 'default')
+            group = next((g for g in self.config.groups if g.id == group_id), None)
+            group_title = group.title if group else 'Default'
 
             content = ''
             
@@ -315,8 +323,12 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                 content += self._generate_list(f"Namespace {full_name}", self.index.lookup_children(id))
 
             files.append(File.generated(config, f"{perma}", content=content))
-            add_nav(perma, f'<code class="cxx-label-{type}">{type.replace("-", " ")}</code> {escape(full_name)}')
-
+            slug = self._symbol_type_slug(sym)
+            slug = name_mapping.get(slug, slug.replace('-', ' ').title())
+            nav_path = [group_title, slug, f'<code class="cxx-label-{type}">{type.replace("-", " ")}</code> {escape(full_name)}']
+            if group_id == '':
+                nav_path = nav_path[1:]  # Remove group title for namespaces
+            add_nav(nav_path, perma)
 
         def attach(node: list|dict|str, parent: list|None = None) -> bool:
             if isinstance(node, list):

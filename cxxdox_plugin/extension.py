@@ -196,7 +196,7 @@ class CxxDoxProcessor(BlockProcessor):
         if group != '' and group != parent_group:
             group_a_el = Element('a', {'class': 'cxx-group', 'data-search-exclude': 'true'})
             group_a_el.text = group
-            group_a_el.set('href', self.link_resolver(f'*groups/{group}.md'))
+            group_a_el.set('href', self.link_resolver(f'*{group}/index.md'))
             group_a_el.set('title', f'Group: {group}')
             h_el.append(group_a_el)
 
