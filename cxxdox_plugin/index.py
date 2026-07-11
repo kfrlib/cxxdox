@@ -96,8 +96,6 @@ class Index:
     symbols: dict[str, dict]
     files: dict[str, list[CxxToken]]
 
-    symbol_prefixes: list[str] = []
-
     def __init__(self):
         self.symbols = {}
 

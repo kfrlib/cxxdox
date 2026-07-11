@@ -128,6 +128,5 @@ class CxxDoxConfig(Config):
     title = Type(str, default="CxxDox Documentation")
     input = ListOfItems(SubConfig(InputDict))
     path_prefix = Type(str, default="cxxdox/")
-    symbol_prefixes = ListOfItems(Type(str), default=[])
     root = Dir(default=".")
     groups = ListOfItems(SubConfig(GroupDict), default=[])

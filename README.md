@@ -93,7 +93,6 @@ All options live under the `cxxdox:` plugin key in `mkdocs.yml`.
 | `title`           | `str`     | `"CxxDox Documentation"` | Title shown on the generated index pages.                                                          |
 | `input`           | list      | **required**             | List of input groups (see below). Each group is a `SubConfig`.                                     |
 | `path_prefix`     | `str`     | `"cxxdox/"`              | Directory under `docs/` where generated pages are placed. Use `auto/` to let the plugin derive it. |
-| `symbol_prefixes` | list[str] | `[]`                     | Only emit symbols whose qualified name starts with one of these prefixes (e.g. `ns`, `ns::inl`).   |
 | `root`            | `dir`     | `.`                      | Root directory used to resolve relative `include`/`exclude` paths.                                 |
 
 ### Input group options (`input[i]`)
@@ -116,9 +115,6 @@ plugins:
   - cxxdox:
       title: Demo library Reference
       path_prefix: auto/
-      symbol_prefixes:
-        - ns
-        - ns::inl
       input:
         - include:
             - library.hpp

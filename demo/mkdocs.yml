@@ -31,9 +31,6 @@ plugins:
   - cxxdox:
       title: Demo library Reference
       path_prefix: auto/
-      symbol_prefixes:
-        - ns
-        - ns::inl
       input:
         - include:
           - library.hpp # relative to mkdocs.yml
