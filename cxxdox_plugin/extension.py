@@ -17,6 +17,29 @@ from pathlib import Path
 
 from collections.abc import MutableSequence
 
+
+def strip_default_namespace(full_name: str, default_namespace: str) -> str:
+    """Rewrite a fully-qualified symbol name for display, given a default namespace.
+
+    Rules (lookup is *not* affected -- this only changes what is rendered):
+    - empty / unset ``default_namespace`` -> returned unchanged.
+    - ``full_name`` equal to ``default_namespace`` -> returned unchanged
+      (the namespace itself stays as-is, e.g. ``ns``).
+    - ``full_name`` starts with ``default_namespace + "::"`` -> that prefix
+      is stripped (e.g. ``ns::func`` -> ``func``).
+    - otherwise -> the name is qualified with a leading ``::`` so it reads
+      as a fully-qualified C++ reference (e.g. ``other::func`` -> ``::other::func``).
+    """
+    if not default_namespace or not full_name:
+        return full_name
+    if full_name == default_namespace:
+        return full_name
+    prefix = default_namespace + "::"
+    if full_name.startswith(prefix):
+        return full_name[len(prefix):]
+    return "::" + full_name
+
+
 class CxxSnippetProcessor(BlockProcessor):  # --8<-- "cxx:library.hpp"
     regex = re.compile(r"^-+8<-+ +\"cxx:(?P<filename>.+?)\" *$", flags=re.MULTILINE)
     def __init__(
@@ -58,18 +81,20 @@ def dummy_span(classes: str, text: str) -> Element:
 
 class SymbolLinkProcessor(InlineProcessor):
     def __init__(
-        self, 
-        index: Index, 
-        pattern: str, 
+        self,
+        index: Index,
+        pattern: str,
         md: Markdown | None,
         link_resolver: Callable[[str],str],
+        default_namespace: str = '',
     ) -> None:
         self.index = index
         self.link_resolver = link_resolver
+        self.default_namespace = default_namespace
         super().__init__(pattern, md)
 
     @staticmethod
-    def make_link(md: Markdown, index: Index, link_resolver: Callable[[str],str], sym_id: str, flags: list[str]) -> Element:
+    def make_link(md: Markdown, index: Index, link_resolver: Callable[[str],str], sym_id: str, flags: list[str], default_namespace: str = '') -> Element:
         emit_brief = 'brief' in flags
         emit_type = 'type' in flags
         emit_file = 'file' in flags
@@ -80,6 +105,7 @@ class SymbolLinkProcessor(InlineProcessor):
         full_name = sym.get('full_name', '')
         if full_name == '':
             log.warning(f"Symbol with empty full_name: {sym_id}")
+        display_name = strip_default_namespace(full_name, default_namespace)
         link = sym.get('permalink', None)
         link = link_resolver(link) if link is not None else None
         root_el = Element('span', {'class': 'cxx-symbol-link'})
@@ -93,7 +119,7 @@ class SymbolLinkProcessor(InlineProcessor):
         link_el.set('href', (link or ''))
         root_el.append(link_el)
         text_span = Element('span', {'class': 'cxx-symbol-name'})
-        text_span.text = md.htmlStash.store(escape(full_name))
+        text_span.text = md.htmlStash.store(escape(display_name))
         link_el.append(text_span)
         link_el.set('title', full_name)
         if emit_file and 'file' in sym:
@@ -151,7 +177,7 @@ class SymbolLinkProcessor(InlineProcessor):
         if not self.index.has_symbol(sym_id):
             log.error(f"Symbol ID not found in handleMatch: {sym_name} -> {sym_id}")
             return dummy_span('cxx-missing-symbol', '[unknown symbol]'), m.start(0), m.end(0)
-        return self.make_link(self.md, self.index, self.link_resolver, sym_id, flags), m.start(0), m.end(0)
+        return self.make_link(self.md, self.index, self.link_resolver, sym_id, flags, self.default_namespace), m.start(0), m.end(0)
 
 
 class CxxDoxProcessor(BlockProcessor):
@@ -270,13 +296,15 @@ class CxxDoxExtension(Extension):
     current_page: Page|None
 
     def __init__(
-            self, 
-            index: Index, 
+            self,
+            index: Index,
             link_resolver: Callable[[str],str],
+            default_namespace: str = '',
             **kwargs: Any,
         ) -> None:
         self.index = index
         self.link_resolver = link_resolver
+        self.default_namespace = default_namespace
         super().__init__(**kwargs)
 
     def extendMarkdown(self, md: Markdown) -> None:
@@ -297,5 +325,5 @@ class CxxDoxExtension(Extension):
         )
         pattern   = r'\[\[(?P<name>`[^`]*`|(?:[^:\]\s`]+(?:::[^:\]\s`]+)*))(?::(?P<flags>(?:\w+(?::\w+)*)))?\]\]'
         md.inlinePatterns.register(
-            SymbolLinkProcessor(self.index, pattern, md, self.link_resolver), 'cxx-symbol-link', 19000
+            SymbolLinkProcessor(self.index, pattern, md, self.link_resolver, self.default_namespace), 'cxx-symbol-link', 19000
         )

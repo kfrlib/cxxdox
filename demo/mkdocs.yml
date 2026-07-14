@@ -31,6 +31,7 @@ plugins:
   - cxxdox:
       title: Demo library Reference
       path_prefix: auto/
+      default_namespace: ns
       input:
         - include:
           - library.hpp # relative to mkdocs.yml

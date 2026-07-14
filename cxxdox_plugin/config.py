@@ -130,3 +130,10 @@ class CxxDoxConfig(Config):
     path_prefix = Type(str, default="cxxdox/")
     root = Dir(default=".")
     groups = ListOfItems(SubConfig(GroupDict), default=[])
+    # Optional default namespace used purely for display. When set, symbol
+    # names that are members of this namespace have the namespace prefix
+    # stripped when rendered (e.g. `ns::func` -> `func`), and names in
+    # other namespaces are displayed with a leading `::` for clarity and
+    # C++ correctness (e.g. `other::func` -> `::other::func`). Lookup
+    # logic is unaffected. Leave empty/None to disable the transform.
+    default_namespace = Type(str, default="")

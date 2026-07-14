@@ -22,6 +22,7 @@ from mkdocs.structure.nav import Navigation
 from urllib.parse import urlparse
 from pathlib import PurePosixPath
 from mkdocs.utils import find_or_create_node
+from .extension import strip_default_namespace
 
 @dataclass
 class IndexPage:
@@ -189,7 +190,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         
         config.extra_css.insert(0, self.css_filename)
 
-        config.markdown_extensions.append(CxxDoxExtension(self.index, self.link_resolver)) # type: ignore[arg-type]
+        config.markdown_extensions.append(CxxDoxExtension(self.index, self.link_resolver, self.config.default_namespace)) # type: ignore[arg-type]
 
         return config    
     
@@ -325,7 +326,13 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             files.append(File.generated(config, f"{perma}", content=content))
             slug = self._symbol_type_slug(sym)
             slug = name_mapping.get(slug, slug.replace('-', ' ').title())
-            nav_path = [group_title, slug, f'<code class="cxx-label-{type}">{type.replace("-", " ")}</code> {escape(full_name)}']
+            
+            display_name = strip_default_namespace(full_name, self.config.default_namespace)
+            nav_path = [
+                group_title, 
+                slug, 
+                f'<code class="cxx-label-{type}">{type.replace("-", " ")}</code> {escape(display_name)}'
+            ]
             if group_id == '':
                 nav_path = nav_path[1:]  # Remove group title for namespaces
             add_nav(nav_path, perma)

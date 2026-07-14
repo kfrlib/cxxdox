@@ -20,6 +20,11 @@ void global_function() {}
 // Namespace for the demo library
 namespace ns
 {
+    inline namespace inline_ns
+    {
+        /// @brief A function in the inline namespace.
+        void inline_ns_function();
+    } // namespace inline_ns
 
     /// @brief A free function in the ns namespace.
     void free_function(int x);
