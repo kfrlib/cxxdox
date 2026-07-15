@@ -147,7 +147,7 @@ class Parser:
     def _is_ignored(self, cursor: Cursor, fully_qualified_name: str) -> bool:
         if cursor.location.file is None:
             return False
-        file_name = cursor.location.file.name
+        file_name = path.normpath(cursor.location.file.name)
         for pattern in (self.ignored_file_patterns or []):
             if fnmatch.fnmatch(file_name, pattern):
                 return True
@@ -317,6 +317,7 @@ class Parser:
         fully_qualified_name: str = '::'.join(path + [displayname])
 
         if self._is_ignored(cursor, fully_qualified_name):
+            log.debug(f'Ignoring symbol: {fully_qualified_name} in file {rel_path}')
             return
         
         access_spec = ''

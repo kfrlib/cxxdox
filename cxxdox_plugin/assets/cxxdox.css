@@ -126,6 +126,12 @@ code.cxx-not-found {
     border-bottom: 2px dotted red;
 }
 
+code.cxx-copy-recursion {
+    color: #b45309;
+    border-bottom: 2px dotted #b45309;
+    background-color: #fff7ed;
+}
+
 .cxx-inline-brief {
     font-style: italic;
     color: #777;

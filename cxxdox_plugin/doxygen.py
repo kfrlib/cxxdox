@@ -248,12 +248,15 @@ def wrap_p(s: str) -> str:
 def doxygen_to_html(block: list|str, 
                     index: Index,
                     context: str,
-                    link_resolver: Callable[[str], str]
+                    link_resolver: Callable[[str], str],
+                    _copy_stack: set[int | str] | None = None
                     ) -> str:
     if isinstance(block, str):
         return f'{escape(block)}'
     if isinstance(block, dict):
         block = [block]
+    if _copy_stack is None:
+        _copy_stack = set()
     html_parts: list[str] = []
     table = None
     for item in block:
@@ -349,25 +352,37 @@ def doxygen_to_html(block: list|str,
                     # @copydoc copies the entire documentation block (brief + details
                     # and all sections) from another symbol. The copied content is
                     # rendered inline, matching Doxygen behavior.
-                    ref_name = item.get('copybrief') or item.get('copydoc')
+                    ref_name = str(item.get('copybrief') or item.get('copydoc'))
                     sym_id = index.lookup_by_scoped_name(context, ref_name)
                     if sym_id is not None:
                         ref_sym = index[sym_id]
+                        # A copied block can refer to itself directly, or through
+                        # another symbol.  Stop before recursively expanding it.
+                        # ``context`` catches the direct self-reference on the
+                        # first expansion; the stack catches longer cycles.
+                        if (sym_id in _copy_stack or
+                                ref_sym.get('full_name', '') == context):
+                            log.warning(f"Recursive @{('copybrief' if 'copybrief' in item else 'copydoc')} "
+                                        f"reference: {ref_name} in context {context}")
+                            html_parts.append(
+                                f' <code class="cxx-copy-recursion">{escape(ref_name)}</code> ')
+                            continue
+                        copy_stack = _copy_stack | {sym_id}
                         # Resolve refs inside the copied content using the referenced
                         # symbol's own scope as context.
                         ref_context = ref_sym.get('full_name', '') or context
                         if 'copybrief' in item:
                             copied = ref_sym.get('brief', '')
                             if copied:
-                                html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver))
+                                html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver, copy_stack))
                             else:
                                 log.warning(f"@copybrief target has no brief: {ref_name} in context {context}")
                         else:  # copydoc
                             copied_parts: list[str] = []
                             if ref_sym.get('brief'):
-                                copied_parts.append(doxygen_to_html(ref_sym['brief'], index, ref_context, link_resolver))
+                                copied_parts.append(doxygen_to_html(ref_sym['brief'], index, ref_context, link_resolver, copy_stack))
                             if ref_sym.get('details'):
-                                copied_parts.append(doxygen_to_html(ref_sym['details'], index, ref_context, link_resolver))
+                                copied_parts.append(doxygen_to_html(ref_sym['details'], index, ref_context, link_resolver, copy_stack))
                             if copied_parts:
                                 html_parts.append(' '.join(copied_parts))
                             else:
@@ -378,7 +393,7 @@ def doxygen_to_html(block: list|str,
                 elif 'enum' in item or 'class' in item or 'struct' in item or 'typedef' in item:
                     # Reference-style tags (@enum, @class, @struct, @typedef) that name a
                     # symbol. Render the name as a link (or plain code) instead of dropping it.
-                    ref_name = item.get('enum') or item.get('class') or item.get('struct') or item.get('typedef')
+                    ref_name = str(item.get('enum') or item.get('class') or item.get('struct') or item.get('typedef'))
                     sym_id = index.lookup_by_scoped_name(context, ref_name)
                     if sym_id is not None:
                         permalink = index.symbol_permalink(sym_id)
