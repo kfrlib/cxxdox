@@ -1,5 +1,6 @@
 site_name: CxxDox Demo
 theme:
+  font: false
   name: "material"
   features:
     - navigation.tabs

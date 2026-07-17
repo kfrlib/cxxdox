@@ -110,6 +110,18 @@ def unwrap(list_or_str):
     return list_or_str
 
 class DoxygenVisitor(NodeVisitor):
+    def __init__(self, file: str | None = None, line: int | None = None):
+        self.file = file
+        self.line = line
+
+    def _location(self) -> str:
+        parts = []
+        if self.file:
+            parts.append(self.file)
+        if self.line is not None:
+            parts.append(f"line {self.line}")
+        return f" ({', '.join(parts)})" if parts else ""
+
     def visit_brief(self, node, visited_children):
         _, _, paragraph = visited_children
         return {'brief': unwrap(paragraph)}
@@ -220,23 +232,30 @@ class DoxygenVisitor(NodeVisitor):
         _, tagname, _, line_text = visited_children
         # tagname may already be unwrapped to a str by generic_visit
         tagname_str = tagname.text.strip() if hasattr(tagname, 'text') else str(tagname).strip()
-        log.warning(f"Unsupported Doxygen tag '@{tagname_str}' in comment: {node.text.strip()!r}")
+        log.warning(f"Unsupported Doxygen tag '@{tagname_str}' in comment{self._location()}: {node.text.strip()!r}")
         return f"{node.text.strip()}"
     def generic_visit(self, node, visited_children):
         return unwrap(visited_children or node)
 
-def parse_doxygen_comment(comment: str) -> list:
+def parse_doxygen_comment(comment: str,
+                           file: str | None = None,
+                           line: int | None = None) -> list:
     try:
         nodes = doxygen_grammar.parse(comment)
 
-        visitor = DoxygenVisitor()
+        visitor = DoxygenVisitor(file=file, line=line)
         result = visitor.visit(nodes)
         result = unwrap(result)
         if not isinstance(result, list):
             result = [result]
         return result
     except parsimonious.exceptions.IncompleteParseError as e:
-        log.error(f"Error parsing doxygen comment: {e}")
+        location = ''
+        if file:
+            location += f' in {file}'
+            if line is not None:
+                location += f':{line}'
+        log.error(f"Error parsing doxygen comment{location}: {e}")
         return [comment]
 
 def wrap_p(s: str) -> str:

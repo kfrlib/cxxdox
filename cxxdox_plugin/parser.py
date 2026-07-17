@@ -122,7 +122,9 @@ class Parser:
         self.clang_index = ClangIndex.create()
 
     @staticmethod
-    def _extract_doc(raw_comment: str) -> list|None:
+    def _extract_doc(raw_comment: str,
+                     file: str | None = None,
+                     line: int | None = None) -> list|None:
         if not raw_comment:
             return None
         raw_comment = raw_comment.strip().replace('\r\n', '\n').replace('\r', '\n')
@@ -142,7 +144,7 @@ class Parser:
             raw_comment = raw_comment[2:]
             raw_comment = re.sub(r'\n\s*//', '\n', raw_comment)
 
-        return parse_doxygen_comment(raw_comment.strip())
+        return parse_doxygen_comment(raw_comment.strip(), file=file, line=line)
 
     def _is_ignored(self, cursor: Cursor, fully_qualified_name: str) -> bool:
         if cursor.location.file is None:
@@ -348,7 +350,9 @@ class Parser:
                 if src := Parser._extract_source(cursor):
                     symbol_dict['source'] = src                
 
-            if doc := Parser._extract_doc(cursor.raw_comment):
+            if doc := Parser._extract_doc(cursor.raw_comment,
+                                          file=rel_path,
+                                          line=cursor.location.line):
                 brief, details = Parser._split_brief(doc)
                 symbol_dict['brief'] = brief
                 symbol_dict['details'] = details

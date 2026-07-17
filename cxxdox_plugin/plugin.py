@@ -178,7 +178,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
     def on_config(self, config: MkDocsConfig) -> MkDocsConfig:
 
         dir = os.path.join(config.docs_dir, self.config.root)
-        log.info(f"CxxDoxPlugin configuration: {self.config}, dir: {dir}")
+        log.debug(f"CxxDoxPlugin configuration: {self.config}, dir: {dir}")
 
         for input_cfg in self.config.input:
             parser = Parser(self.index,
@@ -203,13 +203,23 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         syms: list[dict] = [{**self.index[sym_id], 'id': sym_id} for sym_id in sym_ids]
         syms.sort(key=lambda x: re.sub(r'[^\w]', '', x.get('name', '').lower()))
 
+        use_details = len(syms) >= 200
         letter = ''
+        first = True
         for sym in syms:
             name = sym.get('name', '')
             first_letter = re.sub(r'[^\w]', '', name.upper())[0]
             if first_letter != letter:
+                if letter:
+                    if use_details:
+                        markdown += '\n</details>\n\n'
                 letter = first_letter
-                markdown += f"\n### {escape(letter)}\n\n"
+                if use_details:
+                    opened = ' open' if not first else ''
+                    markdown += f"\n<details name=\"symbols-index\" markdown=\"1\"{opened}>\n\n<summary markdown=\"block\">\n\n### {escape(letter)}\n\n</summary>\n\n"
+                else:
+                    markdown += f"\n### {escape(letter)}\n\n"
+                first = False
 
             id: str = sym.get('id', '')
 
@@ -218,6 +228,10 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                 file = f"({file}:{sym.get('line', '')})"
             
             markdown += f"- [[`{id}`:type:brief]]\n"
+
+        if letter:
+            if use_details:
+                markdown += '\n</details>\n'
 
         return markdown
 
@@ -319,7 +333,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                 perma = perma.split('#')[0]
             if page.full:
                 content += f"# ::: {full_name}\n\n"
-                log.info(f"Generating symbol page {perma}: {full_name} ({id})")
+                log.debug(f"Generating symbol page {perma}: {full_name} ({id})")
             else:
                 content += self._generate_list(f"Namespace {full_name}", self.index.lookup_children(id))
 

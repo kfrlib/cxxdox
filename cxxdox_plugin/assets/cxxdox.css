@@ -171,3 +171,7 @@ code.cxx-copy-recursion {
 .cxx-groups {
     text-align: right;
 }
+
+summary > h3 {
+    margin: 0 !important;
+}
