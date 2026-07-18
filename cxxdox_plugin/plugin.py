@@ -154,16 +154,32 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                     if g.matches(sym.get('file', '')):
                         group = g.id
                         break
-            sym.setdefault('group', group)
+            sym['group'] = group
+
+        for id in all:
+            sym = self.index[id]
 
             top_level_parent_id = find_top_level_parent(id)
             top_level_sym = self.index[top_level_parent_id]
+            page_group = top_level_sym.get('group', 'default')
             if top_level_parent_id == id:
-                self.index.set_permalink(id, f"{self.config.path_prefix}{gen_uri(id, sym, group)}.md")
+                top_level_permalink = top_level_sym.get('permalink', None)
+                if top_level_permalink is None:
+                    top_level_permalink = f"{self.config.path_prefix}{gen_uri(id, sym, page_group)}.md"
+                    self.index.set_permalink(id, top_level_permalink)
+                
+                self.doc_pages.setdefault(
+                    top_level_parent_id,
+                    DocPage(top_level_parent_id, full=top_level_sym.get('type') != SymbolType.NAMESPACE.value),
+                )
             else:
-                self.index.set_permalink(id, f"{self.config.path_prefix}{gen_uri(top_level_parent_id, top_level_sym, group)}.md#{gen_uri(id, sym, group)}")
+                # Process top level parent first
+                top_level_permalink = top_level_sym.get('permalink', None)
+                if top_level_permalink is None:
+                    top_level_permalink = f"{self.config.path_prefix}{gen_uri(top_level_parent_id, top_level_sym, page_group)}.md"
+                    self.index.set_permalink(top_level_parent_id, top_level_permalink)
 
-            page = self.doc_pages.setdefault(top_level_parent_id, DocPage(top_level_parent_id, full=sym.get('type') != SymbolType.NAMESPACE.value))
+                self.index.set_permalink(id, f"{top_level_permalink}#{gen_uri(id, sym, page_group)}")
 
     def on_post_build(self, *, config: MkDocsConfig) -> None:
         css_physical_path = os.path.join(os.path.dirname(__file__), self.css_filename)
@@ -184,7 +200,8 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             parser = Parser(self.index,
                 clang_args=input_cfg.compile_options,
                 ignored_file_patterns=input_cfg.exclude,
-                ignored_symbol_patterns=input_cfg.exclude_symbols
+                ignored_symbol_patterns=input_cfg.exclude_symbols,
+                inline_namespaces=input_cfg.inline_namespaces
             )
             parser.parse_glob(input_cfg.include, input_cfg.exclude, dir)
         
@@ -325,14 +342,14 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             group_title = group.title if group else 'Default'
 
             content = ''
-            
             perma: str = self.index.symbol_permalink(id) or ""
+            
             full_name = sym.get('full_name', '')
             type: str = sym.get('type') or 'unknown'
             if '#' in perma:
                 perma = perma.split('#')[0]
             if page.full:
-                content += f"# ::: {full_name}\n\n"
+                content += f"# ::: {id}\n\n"
                 log.debug(f"Generating symbol page {perma}: {full_name} ({id})")
             else:
                 content += self._generate_list(f"Namespace {full_name}", self.index.lookup_children(id))

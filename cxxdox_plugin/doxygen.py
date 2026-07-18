@@ -22,7 +22,7 @@ doxygen_grammar = Grammar(
     r"""
     _all                 = _newline* (_section _newline*)*
     _section             = brief / details / param / tparam / return / retval / note / see / code /
-                           copybrief / remark / warning / copydoc / enum / class / struct / 
+                           copybrief / copydetails / remark / warning / copydoc / enum / class / struct / relates /
                            pre / post / exception / since / version / deprecated /
                            typedef / _paragraph / anytag 
     _ws                  = ~r"[^\S\n]"
@@ -37,13 +37,13 @@ doxygen_grammar = Grammar(
     _ref_word            = ~r"(?:#|::)?[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?(?:(?:::|#|\.|-|/)[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?)*(?:\((?:[^()]|\([^()]*\))*\)(?:[ \t]*(?:const|volatile))?)?" / ~r"\".*\""
     _tag_start           = "@" / "\\"
     _line_text           = ~r"[^\n]+"
-    _paragraph_text      = ~r"([^@\\\$\n]|\n(?!\n))+"
+    _paragraph_text      = ~r"([^@\\\$`\n]|\n(?!\n))+"
     _paragraph           = (_paragraph_text / _inline)+
     _opt_paragraph       = ((_ws / "\n") (_paragraph_text / _inline)*)?
     
     _param_dir           = "[" ~r"in|out|in[ ,]?out|out[ ,]?in" "]"
 
-    _inline              = ref / p / c / b / formula / md_formula / inline_formula1 / inline_formula2
+    _inline              = inline_code / ref / p / c / b / formula / md_formula / inline_formula1 / inline_formula2
 
     _code_content        = ~r"(?s).*?(?=@endcode|\\endcode|$)"
     _formula_content     = ~r"(?s).*?(?=@f\]|\\f\]|$)"s
@@ -54,6 +54,9 @@ doxygen_grammar = Grammar(
     b                    = _tag_start "b" _ws+ _word_text
     p                    = _tag_start "p" _ws+ _word_text
     c                    = _tag_start "c" _ws+ _word_text
+    # A Markdown inline code span is opaque to Doxygen parsing, so a literal
+    # '@' inside it cannot be mistaken for the start of a Doxygen command.
+    inline_code          = "`" ~r"[^`\n]*" "`"
     ref                  = _tag_start "ref" _ws+ _ref_word
     formula              = _tag_start "f[" _formula_content _tag_start "f]"
     md_formula           = "$" ~r"(?s).*?(?=\$|$)" "$"
@@ -71,12 +74,14 @@ doxygen_grammar = Grammar(
     see                  = _tag_start ("sa" / "see") _opt_paragraph
     code                 = _tag_start "code" _ws* _code_content _tag_start "endcode"
     copybrief            = _tag_start "copybrief" _ws+ _ref_word
+    copydetails          = _tag_start "copydetails" _ws+ _ref_word
     remark               = _tag_start ("remarks" / "remark") _opt_paragraph
     warning              = _tag_start "warning" _opt_paragraph
     copydoc              = _tag_start "copydoc" _ws+ _ref_word
     enum                 = _tag_start "enum" _ws+ _ref_word
     class                = _tag_start "class" _ws+ _ref_word
     struct               = _tag_start "struct" _ws+ _ref_word
+    relates              = _tag_start ("relates" / "related") _ws+ _ref_word
     pre                  = _tag_start "pre" _opt_paragraph
     post                 = _tag_start "post" _opt_paragraph
     exception            = _tag_start ("exceptions" / "exception" / "throws" / "throw") _ws* _word_text _opt_paragraph
@@ -134,6 +139,9 @@ class DoxygenVisitor(NodeVisitor):
     def visit_copybrief(self, node, visited_children):
         _, _, _, symbol_name = visited_children
         return {'copybrief': symbol_name}
+    def visit_copydetails(self, node, visited_children):
+        _, _, _, symbol_name = visited_children
+        return {'copydetails': symbol_name}
     def visit_copydoc(self, node, visited_children):
         _, _, _, symbol_name = visited_children
         return {'copydoc': symbol_name}
@@ -177,6 +185,9 @@ class DoxygenVisitor(NodeVisitor):
     def visit_struct(self, node, visited_children):
         _, _, _, symbol_name = visited_children
         return {'struct': symbol_name}
+    def visit_relates(self, node, visited_children):
+        _, _, _, symbol_name = visited_children
+        return {'relates': symbol_name}
     def visit_typedef(self, node, visited_children):
         _, _, _, symbol_name = visited_children
         return {'typedef': symbol_name}
@@ -216,13 +227,17 @@ class DoxygenVisitor(NodeVisitor):
         return visited_children[1]
     def visit_p(self, node, visited_children):
         _, _, _, word = visited_children
-        return {'p': word}
+        # Doxygen treats \p as an alias for \c (monospaced text).
+        return {'c': word}
     def visit_b(self, node, visited_children):
         _, _, _, word = visited_children
         return {'b': word}
     def visit_c(self, node, visited_children):
         _, _, _, word = visited_children
         return {'c': word}
+    def visit_inline_code(self, node, visited_children):
+        _, code, _ = visited_children
+        return {'c': code}
     def visit_ref(self, node, visited_children):
         _, _, _, word = visited_children
         return {'ref': word}
@@ -356,7 +371,8 @@ def doxygen_to_html(block: list|str,
                 elif 'p' in item:
                     html_parts.append(f' <em>{escape(item["p"])}</em> ')
                 elif 'c' in item:
-                    html_parts.append(f' <code>{escape(item["c"])}</code> ')
+                    escaped_html = escape(item["c"])
+                    html_parts.append(f' <code>{escaped_html}</code> ')
                 elif 'ref' in item:
                     sym_id = index.lookup_by_scoped_name(context, item['ref'])
                     if sym_id is not None:
@@ -366,12 +382,13 @@ def doxygen_to_html(block: list|str,
                     else:
                         log.warning(f"Doxygen reference not found: {item['ref']} in context {context}")
                         html_parts.append(f' <code class="cxx-not-found">{escape(item["ref"])}</code> ')
-                elif 'copybrief' in item or 'copydoc' in item:
+                elif 'copybrief' in item or 'copydetails' in item or 'copydoc' in item:
                     # @copybrief copies the brief paragraph from another symbol.
+                    # @copydetails copies the details paragraph from another symbol.
                     # @copydoc copies the entire documentation block (brief + details
                     # and all sections) from another symbol. The copied content is
                     # rendered inline, matching Doxygen behavior.
-                    ref_name = str(item.get('copybrief') or item.get('copydoc'))
+                    ref_name = str(item.get('copybrief') or item.get('copydetails') or item.get('copydoc'))
                     sym_id = index.lookup_by_scoped_name(context, ref_name)
                     if sym_id is not None:
                         ref_sym = index[sym_id]
@@ -381,7 +398,9 @@ def doxygen_to_html(block: list|str,
                         # first expansion; the stack catches longer cycles.
                         if (sym_id in _copy_stack or
                                 ref_sym.get('full_name', '') == context):
-                            log.warning(f"Recursive @{('copybrief' if 'copybrief' in item else 'copydoc')} "
+                            command = ('copybrief' if 'copybrief' in item else
+                                       'copydetails' if 'copydetails' in item else 'copydoc')
+                            log.warning(f"Recursive @{command} "
                                         f"reference: {ref_name} in context {context}")
                             html_parts.append(
                                 f' <code class="cxx-copy-recursion">{escape(ref_name)}</code> ')
@@ -396,6 +415,12 @@ def doxygen_to_html(block: list|str,
                                 html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver, copy_stack))
                             else:
                                 log.warning(f"@copybrief target has no brief: {ref_name} in context {context}")
+                        elif 'copydetails' in item:
+                            copied = ref_sym.get('details', '')
+                            if copied:
+                                html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver, copy_stack))
+                            else:
+                                log.warning(f"@copydetails target has no details: {ref_name} in context {context}")
                         else:  # copydoc
                             copied_parts: list[str] = []
                             if ref_sym.get('brief'):
@@ -409,10 +434,10 @@ def doxygen_to_html(block: list|str,
                     else:
                         log.warning(f"Doxygen reference not found: {ref_name} in context {context}")
                         html_parts.append(f' <code class="cxx-not-found">{escape(ref_name)}</code> ')
-                elif 'enum' in item or 'class' in item or 'struct' in item or 'typedef' in item:
-                    # Reference-style tags (@enum, @class, @struct, @typedef) that name a
+                elif 'enum' in item or 'class' in item or 'struct' in item or 'relates' in item or 'typedef' in item:
+                    # Reference-style tags (@enum, @class, @struct, @relates, @typedef) that name a
                     # symbol. Render the name as a link (or plain code) instead of dropping it.
-                    ref_name = str(item.get('enum') or item.get('class') or item.get('struct') or item.get('typedef'))
+                    ref_name = str(item.get('enum') or item.get('class') or item.get('struct') or item.get('relates') or item.get('typedef'))
                     sym_id = index.lookup_by_scoped_name(context, ref_name)
                     if sym_id is not None:
                         permalink = index.symbol_permalink(sym_id)

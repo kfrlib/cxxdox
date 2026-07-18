@@ -277,7 +277,10 @@ class CxxDoxProcessor(BlockProcessor):
             identifier = match["name"]
             heading_level = match["heading"].count("#")
 
-            sym_id = self.index.lookup_by_scoped_name('', identifier)
+            if self.index.has_symbol(identifier):
+                sym_id = identifier
+            else:
+                sym_id = self.index.lookup_by_scoped_name('', identifier)
 
             if sym_id is None:
                 log.warning(f"CxxDox symbol not found: {identifier}")

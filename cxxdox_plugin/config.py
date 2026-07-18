@@ -5,6 +5,7 @@ import re
 
 class InputDict(Config):
     include = ListOfItems(Type(str))
+    inline_namespaces = ListOfItems(Type(str), default=[])
     exclude = ListOfItems(Type(str), default=[])
     exclude_symbols = ListOfItems(Type(str), default=[])
     compile_options = ListOfItems(Type(str), default=[])

@@ -3,6 +3,21 @@ from enum import Enum
 import re
 
 
+def normalize_symbol_name(name: str) -> str:
+    """Remove redundant whitespace from a symbol's signature."""
+    def is_identifier_character(character: str) -> bool:
+        return character == '_' or character == '$' or character.isalnum()
+
+    def replace_space(match: re.Match) -> str:
+        left = name[match.start() - 1] if match.start() else ''
+        right = name[match.end()] if match.end() < len(name) else ''
+        # Keep the separator between two identifier characters, as in
+        # ``const T``; whitespace next to punctuation is redundant.
+        return ' ' if is_identifier_character(left) and is_identifier_character(right) else ''
+
+    return re.sub(r'\s+', replace_space, name).strip()
+
+
 class SymbolType(Enum):
     NAMESPACE       = 'namespace'
     FUNCTION        = 'function'
@@ -140,10 +155,11 @@ class Index:
         namespace = wrap_name(namespace)
         best_match = None
         best_depth = -1
-        name = wrap_name(name)
+        name = normalize_symbol_name(wrap_name(name))
 
         for id, sym in self.symbols.items():
             def test_symbol(full_name: str) -> bool:
+                full_name = normalize_symbol_name(full_name)
                 if not full_name.endswith(name):
                     return False
                 # compare namespace part to the left of name suffix
@@ -162,7 +178,11 @@ class Index:
             full_name: str = wrap_name(sym.get('full_name', ''))
             full_name_1 = strip_params(full_name)
             full_name_2 = strip_tparams(full_name_1)
-            if not test_symbol(full_name) and not test_symbol(full_name_1) and not test_symbol(full_name_2):
+            full_name_3 = full_name_2[:-2] + full_name[len(full_name_1) - 2:]
+            if (not test_symbol(full_name)
+                    and not test_symbol(full_name_1)
+                    and not test_symbol(full_name_2)
+                    and not test_symbol(full_name_3)):
                 continue
 
             depth = full_name.count('::')

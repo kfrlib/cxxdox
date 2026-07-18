@@ -63,7 +63,7 @@ def map_cursor_to_symbol_type(cursor: Cursor) -> SymbolType|None:
         # read byte at offset 28
         decl_kind = byte_ptr[28] & 0x7F
         if decl_kind == 69:
-            log.warning(f"Unexposed decl kind: {decl_kind} for cursor {cursor.spelling} ({cursor.kind})")
+            log.debug(f"Unexposed decl kind: {decl_kind} for cursor {cursor.spelling} ({cursor.kind})")
             return SymbolType.VARIABLE
     return None
 
@@ -109,16 +109,18 @@ class Parser:
     file_path: str
     ignored_file_patterns: list[str]
     ignored_symbol_patterns: list[str]
+    inline_namespaces: list[str]
 
     per_file_doc: dict[str, dict] = {}
     source_cache: dict[str, Source] = {} # Class variable to cache file contents
 
     def __init__(self, index: Index, clang_args: list[str] = [], ignored_file_patterns: list[str] = [], 
-                 ignored_symbol_patterns: list[str] = []):
+                 ignored_symbol_patterns: list[str] = [], inline_namespaces: list[str] = []):
         self.index = index
         self.clang_args = clang_args
         self.ignored_file_patterns = ignored_file_patterns
         self.ignored_symbol_patterns = ignored_symbol_patterns
+        self.inline_namespaces = inline_namespaces
         self.clang_index = ClangIndex.create()
 
     @staticmethod
@@ -365,7 +367,9 @@ class Parser:
 
         if Parser._is_scope(cursor):
             parent_id = cursor.get_usr()
-            path = path + [displayname]
+            qualified_path = '::'.join(path + [displayname])
+            if qualified_path not in self.inline_namespaces:
+                path = path + [displayname]
             
         if type is not None:
             self.index.add_symbol(cursor.get_usr(), symbol_dict)
