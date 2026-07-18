@@ -3,15 +3,17 @@ from xml.etree import ElementTree
 from markdown import Extension, Markdown
 from markdown.blockprocessors import BlockProcessor
 from markdown.inlinepatterns import InlineProcessor
+from markdown.util import AtomicString
 from typing import TYPE_CHECKING, Any
 from xml.etree.ElementTree import Element
 from xml.etree.ElementTree import fromstring
 from mkdocs.structure.pages import Page
 from typing import Callable
-from cxxdox_plugin.doxygen import doxygen_to_html, escape
+from cxxdox_plugin.doxygen import doxygen_to_html
 from .highlight import cxx_tokens_to_html
 from .logs import log
 from .parser import Index, SymbolType
+from .utils import atomicize_subtree
 import os
 from pathlib import Path
 
@@ -76,7 +78,7 @@ class CxxSnippetProcessor(BlockProcessor):  # --8<-- "cxx:library.hpp"
 
 def dummy_span(classes: str, text: str) -> Element:
     span = Element('span', {'class': classes})
-    span.text = text
+    span.text = AtomicString(text)
     return span
 
 class SymbolLinkProcessor(InlineProcessor):
@@ -112,24 +114,24 @@ class SymbolLinkProcessor(InlineProcessor):
         if emit_type:
             type_span = Element('code')
             type_span.set('class', 'cxx-label-' + sym.get('type', 'unknown'))
-            type_span.text = sym.get('type', '').replace('-', ' ')
-            type_span.tail = ' '
+            type_span.text = AtomicString(sym.get('type', '').replace('-', ' '))
+            type_span.tail = AtomicString(' ')
             root_el.append(type_span)
         link_el = Element('a')
         link_el.set('href', (link or ''))
         root_el.append(link_el)
         text_span = Element('span', {'class': 'cxx-symbol-name'})
-        text_span.text = md.htmlStash.store(escape(display_name))
+        text_span.text = AtomicString(display_name)
         link_el.append(text_span)
         link_el.set('title', full_name)
         if emit_file and 'file' in sym:
             file_span = Element('span', {'class': 'cxx-symbol-file'})
-            file_span.text = md.htmlStash.store(escape(f' ({sym.get("file","")}:{sym.get("line","")})'))
+            file_span.text = AtomicString(f' ({sym.get("file", "")}:{sym.get("line", "")})')
             root_el.append(file_span)
         if emit_brief and 'brief' in sym:
             context = full_name or ''
             brief_html = doxygen_to_html(sym.get('brief', ''), index, context, link_resolver)
-            brief_el = fromstring(f'<span class="cxx-inline-brief"> {brief_html}</span>')
+            brief_el = atomicize_subtree(fromstring(f'<span class="cxx-inline-brief"> {brief_html}</span>'))
             root_el.append(brief_el)
         return root_el
 
@@ -214,14 +216,14 @@ class CxxDoxProcessor(BlockProcessor):
 
         h_el = Element(f'h{max(heading_level,1)}', {'id': hash})
         h_code_el = Element('code', {'class': 'cxx-label-' + sym.get('type', 'unknown')})
-        h_code_el.text = self.md.htmlStash.store(escape(sym.get('type', '')).replace('-', ' '))
+        h_code_el.text = AtomicString(sym.get('type', '').replace('-', ' '))
         h_el.append(h_code_el)
-        h_code_el.tail = ' ' + self.md.htmlStash.store(escape(sym.get('name', ''))) + ' '
+        h_code_el.tail = AtomicString(' ' + sym.get('name', '') + ' ')
 
         group = sym.get('group', '')
         if group != '' and group != parent_group:
             group_a_el = Element('a', {'class': 'cxx-group', 'data-search-exclude': 'true'})
-            group_a_el.text = group
+            group_a_el.text = AtomicString(group)
             group_a_el.set('href', self.link_resolver(f'*{group}/index.md'))
             group_a_el.set('title', f'Group: {group}')
             h_el.append(group_a_el)
@@ -233,7 +235,7 @@ class CxxDoxProcessor(BlockProcessor):
             pre_el = Element('pre')
             src = sym.get('source', '')
             html_source = cxx_tokens_to_html(src, self.index, {sym_id}, self.link_resolver)
-            code_el = fromstring(f'<code>{html_source}</code>')
+            code_el = atomicize_subtree(fromstring(f'<code>{html_source}</code>'))
             pre_el.append(Element('b', {'class': 'LAUyl5Cz5B'}))
             pre_el.append(code_el)
             div_highlight.append(pre_el)
@@ -241,10 +243,10 @@ class CxxDoxProcessor(BlockProcessor):
 
         contents_el = Element('div', {'class': 'cxx-contents'})
         brief_html = '<p>' + doxygen_to_html(sym.get('brief', ''), self.index, context, self.link_resolver) + '</p>'
-        contents_el.append(fromstring(brief_html))
+        contents_el.append(atomicize_subtree(fromstring(brief_html)))
         if 'details' in sym and sym['details']:
             details_html = '<p>' + doxygen_to_html(sym.get('details', ''), self.index, context, self.link_resolver) + '</p>'
-            contents_el.append(fromstring(details_html))
+            contents_el.append(atomicize_subtree(fromstring(details_html)))
 
         parent.append(contents_el)
         
@@ -259,7 +261,7 @@ class CxxDoxProcessor(BlockProcessor):
             location_el = Element('div', {'class': 'cxx-location'})
             location_p_el = Element('p')
             location_el.append(location_p_el)            
-            location_p_el.text = f'Defined at {escape(file)}:{sym.get("line","")}'
+            location_p_el.text = AtomicString(f'Defined at {file}:{sym.get("line", "")}')
             contents_el.append(location_el)
 
     def run(self, parent: Element, blocks: MutableSequence[str]) -> None:
