@@ -232,7 +232,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                         markdown += '\n</details>\n\n'
                 letter = first_letter
                 if use_details:
-                    opened = ' open' if not first else ''
+                    opened = ' open' if first else ''
                     markdown += f"\n<details name=\"symbols-index\" markdown=\"1\"{opened}>\n\n<summary markdown=\"block\">\n\n### {escape(letter)}\n\n</summary>\n\n"
                 else:
                     markdown += f"\n### {escape(letter)}\n\n"
