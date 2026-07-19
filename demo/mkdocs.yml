@@ -33,6 +33,7 @@ plugins:
       title: Demo library Reference
       path_prefix: auto/
       default_namespace: ns
+      git_browse: https://github.com/kfrlib/cxxdox/blob/{SHA}/demo/{FILE_PATH}#L{LINE}
       input:
         - include:
           - library.hpp # relative to mkdocs.yml

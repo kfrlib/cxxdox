@@ -1,21 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-import re
-
-
-def normalize_symbol_name(name: str) -> str:
-    """Remove redundant whitespace from a symbol's signature."""
-    def is_identifier_character(character: str) -> bool:
-        return character == '_' or character == '$' or character.isalnum()
-
-    def replace_space(match: re.Match) -> str:
-        left = name[match.start() - 1] if match.start() else ''
-        right = name[match.end()] if match.end() < len(name) else ''
-        # Keep the separator between two identifier characters, as in
-        # ``const T``; whitespace next to punctuation is redundant.
-        return ' ' if is_identifier_character(left) and is_identifier_character(right) else ''
-
-    return re.sub(r'\s+', replace_space, name).strip()
+from .utils import normalize_symbol_name, share_prefix, strip_params, strip_tparams, wrap_name
 
 
 class SymbolType(Enum):
@@ -149,15 +134,6 @@ class Index:
         ]
 
     def lookup_by_scoped_name(self, namespace: str, name: str) -> str|None:
-        def wrap_name(n: str) -> str:
-            if not n.startswith('::'):
-                n = '::' + n
-            if not n.endswith('::'):
-                n += '::'
-            return n
-        def share_prefix(a: str, b: str) -> bool:
-            return a.startswith(b) or b.startswith(a)
-        
         namespace = wrap_name(namespace)
         best_match = None
         best_depth = -1
@@ -172,15 +148,6 @@ class Index:
                 if not share_prefix(full_name[:-(len(name)-2)], namespace):
                     return False
                 return True
-            def strip_params(full_name: str) -> str:
-                if full_name.endswith(')::'):
-                    return re.sub(r'\(.*\)::$', '::', full_name)
-                return full_name
-            def strip_tparams(full_name: str) -> str:
-                if full_name.endswith('>::'):
-                    return re.sub(r'\<.*\>::$', '::', full_name)
-                return full_name
-
             full_name: str = wrap_name(sym.get('full_name', ''))
             full_name_1 = strip_params(full_name)
             full_name_2 = strip_tparams(full_name_1)

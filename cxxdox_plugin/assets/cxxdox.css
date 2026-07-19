@@ -47,12 +47,21 @@ code.cxx-label-variable {
     background-color: oklch(from var(--var-cxx-color7) l c h / var(--var-cxx-label-alpha));
 }
 
+
 .cxx-label-enum, .cxx-label-function, .cxx-label-constructor, .cxx-label-destructor, .cxx-label-operator,
 .cxx-label-class, .cxx-label-struct, .cxx-label-union,
 .cxx-label-namespace, .cxx-label-variable, .cxx-label-typedef, .cxx-label-macro, .cxx-label-concept,
 .cxx-label-deduction-guide, .cxx-label-enum-constant {
     font-weight: bold;
     font-size: 0.85em;
+}
+
+header .cxx-label-enum, header .cxx-label-function, header .cxx-label-constructor, header .cxx-label-destructor, header .cxx-label-operator,
+header .cxx-label-class, header .cxx-label-struct, header .cxx-label-union,
+header .cxx-label-namespace, header .cxx-label-variable, header .cxx-label-typedef, header .cxx-label-macro, header .cxx-label-concept,
+header .cxx-label-deduction-guide, header .cxx-label-enum-constant {
+    color: inherit;
+    background-color: inherit;
 }
 
 .cxx-contents {
@@ -62,9 +71,13 @@ code.cxx-label-variable {
     border-bottom: none;
 }
 
-.cxx-location {
+.cxx-location, .cxx-full-name, .cxx-epilogue {
     font-size: 0.85em;
     color: var(--var-cxx-secondary-color);
+}
+
+.cxx-epilogue {
+    margin-top: 2em;
 }
 
 .highlight a {

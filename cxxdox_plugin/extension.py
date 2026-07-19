@@ -13,33 +13,11 @@ from cxxdox_plugin.doxygen import doxygen_to_html
 from .highlight import cxx_tokens_to_html
 from .logs import log
 from .parser import Index, SymbolType
-from .utils import atomicize_subtree
+from .utils import atomicize_subtree, strip_default_namespace, strip_params, strip_scope, strip_tparams
 import os
 from pathlib import Path
 
 from collections.abc import MutableSequence
-
-
-def strip_default_namespace(full_name: str, default_namespace: str) -> str:
-    """Rewrite a fully-qualified symbol name for display, given a default namespace.
-
-    Rules (lookup is *not* affected -- this only changes what is rendered):
-    - empty / unset ``default_namespace`` -> returned unchanged.
-    - ``full_name`` equal to ``default_namespace`` -> returned unchanged
-      (the namespace itself stays as-is, e.g. ``ns``).
-    - ``full_name`` starts with ``default_namespace + "::"`` -> that prefix
-      is stripped (e.g. ``ns::func`` -> ``func``).
-    - otherwise -> the name is qualified with a leading ``::`` so it reads
-      as a fully-qualified C++ reference (e.g. ``other::func`` -> ``::other::func``).
-    """
-    if not default_namespace or not full_name:
-        return full_name
-    if full_name == default_namespace:
-        return full_name
-    prefix = default_namespace + "::"
-    if full_name.startswith(prefix):
-        return full_name[len(prefix):]
-    return "::" + full_name
 
 
 class CxxSnippetProcessor(BlockProcessor):  # --8<-- "cxx:library.hpp"
@@ -100,6 +78,8 @@ class SymbolLinkProcessor(InlineProcessor):
         emit_brief = 'brief' in flags
         emit_type = 'type' in flags
         emit_file = 'file' in flags
+        nosig = 'nosig' in flags
+        noscope = 'noscope' in flags
         if not index.has_symbol(sym_id):
             log.error(f"Symbol ID not found in make_link: {sym_id}")
             return dummy_span('cxx-missing-symbol', '[unknown symbol]')
@@ -107,7 +87,12 @@ class SymbolLinkProcessor(InlineProcessor):
         full_name = sym.get('full_name', '')
         if full_name == '':
             log.warning(f"Symbol with empty full_name: {sym_id}")
-        display_name = strip_default_namespace(full_name, default_namespace)
+        display_name = full_name if sym.get('type') == SymbolType.MACRO.value else strip_default_namespace(full_name, default_namespace)
+        if nosig:
+            display_name = strip_params(display_name)
+            display_name = strip_tparams(display_name)
+        if noscope:
+            display_name = strip_scope(display_name)
         link = sym.get('permalink', None)
         link = link_resolver(link) if link is not None else None
         root_el = Element('span', {'class': 'cxx-symbol-link'})
@@ -255,6 +240,16 @@ class CxxDoxProcessor(BlockProcessor):
             contents_el.append(children_el)
             for child_id in children:
                 self._symbol_doc(children_el, child_id, min(heading_level + 1, 6), group)
+
+        full_name = sym.get('full_name', '')
+        full_name_el = Element('div', {'class': 'cxx-full-name'})
+        full_name_p_el = Element('p')
+        full_name_el.append(full_name_p_el)
+        full_name_p_el.text = AtomicString(f'Fully qualified name: ')
+        full_name_code_el = Element('code')
+        full_name_code_el.text = AtomicString(full_name)
+        full_name_p_el.append(full_name_code_el)
+        contents_el.append(full_name_el)
 
         file = sym.get("file","")
         if file != '':
