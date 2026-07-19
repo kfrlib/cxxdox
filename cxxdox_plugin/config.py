@@ -131,6 +131,9 @@ class CxxDoxConfig(Config):
     path_prefix = Type(str, default="cxxdox/")
     root = Dir(default=".")
     groups = ListOfItems(SubConfig(GroupDict), default=[])
+    # URL template for links to symbol source. The placeholders {SHA},
+    # {FILE_PATH}, and {LINE} are replaced while rendering documentation.
+    git_browse = Type(str, default="")
     # Optional default namespace used purely for display. When set, symbol
     # names that are members of this namespace have the namespace prefix
     # stripped when rendered (e.g. `ns::func` -> `func`), and names in

@@ -1,4 +1,5 @@
 from typing import Any, Callable, Tuple
+import subprocess
 from cxxdox_plugin.doxygen import doxygen_to_html, escape
 import mkdocs.plugins
 import logging
@@ -144,11 +145,13 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
     index: Index
     page_uris: set[str]
     current_uri: str|None
+    git_sha: str
 
     def __init__(self):
         self.index = Index()
         self.page_uris = set()
         self.current_uri = None
+        self.git_sha = ''
         
     def _symbol_type_slug(self, sym) -> str:
         type = sym.get('type', 'unknown')
@@ -258,6 +261,21 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         dir = os.path.join(config.docs_dir, self.config.root)
         log.debug(f"CxxDoxPlugin configuration: {self.config}, dir: {dir}")
 
+        # Resolve the revision before constructing Parser instances, which
+        # initialize libclang and begin collecting symbols.
+        if self.config.git_browse:
+            try:
+                result = subprocess.run(
+                    ['git', 'rev-parse', 'HEAD'],
+                    cwd=os.path.dirname(config.config_file_path),
+                    capture_output=True,
+                    check=True,
+                    text=True,
+                )
+                self.git_sha = result.stdout.strip()
+            except (OSError, subprocess.CalledProcessError) as error:
+                log.warning(f'Unable to determine Git commit hash for git_browse links: {error}')
+
         for input_cfg in self.config.input:
             parser = Parser(self.index,
                 clang_args=input_cfg.compile_options,
@@ -269,7 +287,12 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         
         config.extra_css.insert(0, self.css_filename)
 
-        config.markdown_extensions.append(CxxDoxExtension(self.index, self.link_resolver, self.config.default_namespace)) # type: ignore[arg-type]
+        config.markdown_extensions.append(CxxDoxExtension(
+            self.index,
+            self.link_resolver,
+            self.git_browse_link,
+            self.config.default_namespace,
+        )) # type: ignore[arg-type]
 
         return config    
     
@@ -502,3 +525,14 @@ hide:
             result = os.path.relpath(abs_path, start=os.path.dirname(self.current_uri)).replace('\\', '/')
             return result
         return abs_path
+
+    def git_browse_link(self, sym: dict) -> str | None:
+        """Build the configured source-browser URL for a symbol, if possible."""
+        file_path = sym.get('file', '')
+        line = sym.get('line', '')
+        if not self.config.git_browse or not self.git_sha or not file_path or not line:
+            return None
+        return (self.config.git_browse
+                .replace('{SHA}', self.git_sha)
+                .replace('{FILE_PATH}', str(file_path))
+                .replace('{LINE}', str(line)))

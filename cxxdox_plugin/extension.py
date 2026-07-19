@@ -175,11 +175,13 @@ class CxxDoxProcessor(BlockProcessor):
         md: Markdown,
         index: Index,
         link_resolver: Callable[[str],str],
+        git_browse_link: Callable[[dict], str | None],
     ) -> None:
         super().__init__(parser=md.parser)
         self.md = md
         self.index = index
         self.link_resolver = link_resolver
+        self.git_browse_link = git_browse_link
         
     def test(self, parent: Element, block: str) -> bool:
         return bool(self.regex.search(block))
@@ -256,7 +258,19 @@ class CxxDoxProcessor(BlockProcessor):
             location_el = Element('div', {'class': 'cxx-location'})
             location_p_el = Element('p')
             location_el.append(location_p_el)            
-            location_p_el.text = AtomicString(f'Defined at {file}:{sym.get("line", "")}')
+            line = sym.get('line', '')
+            source_url = self.git_browse_link(sym)
+            location_p_el.text = AtomicString('Declared at ')
+            if source_url is not None:
+                source_link_el = Element('a', {
+                    'href': source_url,
+                    'target': '_blank',
+                    'rel': 'noopener noreferrer',
+                })
+                source_link_el.text = AtomicString(f'{file}:{line}')
+                location_p_el.append(source_link_el)
+            else:
+                location_p_el.text = AtomicString(f'Declared at {file}:{line}')
             contents_el.append(location_el)
 
     def run(self, parent: Element, blocks: MutableSequence[str]) -> None:
@@ -299,22 +313,24 @@ class CxxDoxExtension(Extension):
             self,
             index: Index,
             link_resolver: Callable[[str],str],
+            git_browse_link: Callable[[dict], str | None],
             default_namespace: str = '',
             **kwargs: Any,
         ) -> None:
         self.index = index
         self.link_resolver = link_resolver
+        self.git_browse_link = git_browse_link
         self.default_namespace = default_namespace
         super().__init__(**kwargs)
 
     def extendMarkdown(self, md: Markdown) -> None:
         md.parser.blockprocessors.register(
-            CxxDoxProcessor(md, self.index, self.link_resolver),
+            CxxDoxProcessor(md, self.index, self.link_resolver, self.git_browse_link),
             "cxxdox_block_processor",
             priority=75,
         )
         md.parser.blockprocessors.register(
-            CxxDoxProcessor(md, self.index, self.link_resolver),
+            CxxDoxProcessor(md, self.index, self.link_resolver, self.git_browse_link),
             "cxxdox_brief_processor",
             priority=75,
         )

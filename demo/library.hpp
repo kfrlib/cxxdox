@@ -151,7 +151,7 @@ namespace ns
     public:
         /// @brief Constructor
         /// @details Initializes the Example class.
-        /// @see @ref ~Example()
+        /// @see ~Example()
         Example();
 
         /// @brief Parameterized constructor
@@ -281,7 +281,7 @@ namespace ns
         return (n <= 1) ? 1 : n * factorial(n - 1);
     }
 
-    constexpr void fn1(std::byte a, Color b) noexcept { return a; }
+    constexpr void fn1(std::byte a, Color b) noexcept { }
 
     /// @brief A wrapper that forwards any argument into its stored value.
     /// @details This utility struct uses a perfect-forwarding constructor to
@@ -344,7 +344,6 @@ namespace ns
     {
     };
 
-    /// @unknowntag This tag is not recognized and should be handled gracefully
     struct conflictingName
     {
     };
