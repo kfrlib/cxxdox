@@ -142,6 +142,12 @@ class Index:
             return self.symbols[id].get('permalink', None)
         return None
 
+    def lookup_by_permalink(self, permalink: str) -> list[str]:
+        return [
+            id for id, symbol in self.symbols.items()
+            if symbol.get('permalink') == permalink
+        ]
+
     def lookup_by_scoped_name(self, namespace: str, name: str) -> str|None:
         def wrap_name(n: str) -> str:
             if not n.startswith('::'):

@@ -66,11 +66,6 @@ index_pages = [
     IndexPage("macros/index.md", "Macros", [SymbolType.MACRO.value], SymbolType.all_and_none()),
 ]
 
-@dataclass 
-class DocPage:
-    id: str
-    full: bool = False
-
 def _plural(t: str) -> str:
     if t.endswith('y'):
         return t[:-1] + 'ies'
@@ -83,12 +78,12 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
     css_filename: str = "assets/cxxdox.css"
 
     index: Index
-    doc_pages: dict[str, DocPage]
+    page_uris: set[str]
     current_uri: str|None
 
     def __init__(self):
         self.index = Index()
-        self.doc_pages = {}
+        self.page_uris = set()
         self.current_uri = None
         
     def _symbol_type_slug(self, sym) -> str:
@@ -107,6 +102,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         Assigns symbols to groups, and documentation pages. Generates unique permalinks for each symbol.
         """
         names: dict[str,dict[str,str]] = {}
+        self.page_uris.clear()
         def unique_name(id, name: str) -> str:
             if name not in names:
                 names[name] = {id: name}
@@ -167,17 +163,14 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                 if top_level_permalink is None:
                     top_level_permalink = f"{self.config.path_prefix}{gen_uri(id, sym, page_group)}.md"
                     self.index.set_permalink(id, top_level_permalink)
-                
-                self.doc_pages.setdefault(
-                    top_level_parent_id,
-                    DocPage(top_level_parent_id, full=top_level_sym.get('type') != SymbolType.NAMESPACE.value),
-                )
+                self.page_uris.add(top_level_permalink)
             else:
                 # Process top level parent first
                 top_level_permalink = top_level_sym.get('permalink', None)
                 if top_level_permalink is None:
                     top_level_permalink = f"{self.config.path_prefix}{gen_uri(top_level_parent_id, top_level_sym, page_group)}.md"
                     self.index.set_permalink(top_level_parent_id, top_level_permalink)
+                self.page_uris.add(top_level_permalink)
 
                 self.index.set_permalink(id, f"{top_level_permalink}#{gen_uri(id, sym, page_group)}")
 
@@ -335,38 +328,37 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         log.info('Generating symbol pages...')
 
-        for id, page in self.doc_pages.items():
-            sym = self.index[id]
-            group_id = sym.get('group', 'default')
-            group = next((g for g in self.config.groups if g.id == group_id), None)
-            group_title = group.title if group else 'Default'
-
+        for perma in self.page_uris:
+            ids = self.index.lookup_by_permalink(perma)
             content = ''
-            perma: str = self.index.symbol_permalink(id) or ""
-            
-            full_name = sym.get('full_name', '')
-            type: str = sym.get('type') or 'unknown'
-            if '#' in perma:
-                perma = perma.split('#')[0]
-            if page.full:
-                content += f"# ::: {id}\n\n"
+            for id in ids:
+                sym = self.index[id]
+                full_name = sym.get('full_name', '')
+                if sym.get('type') == SymbolType.NAMESPACE.value:
+                    content += self._generate_list(f"Namespace {full_name}", self.index.lookup_children(id))
+                else:
+                    content += f"# ::: {id}\n\n"
                 log.debug(f"Generating symbol page {perma}: {full_name} ({id})")
-            else:
-                content += self._generate_list(f"Namespace {full_name}", self.index.lookup_children(id))
 
             files.append(File.generated(config, f"{perma}", content=content))
-            slug = self._symbol_type_slug(sym)
-            slug = name_mapping.get(slug, slug.replace('-', ' ').title())
-            
-            display_name = strip_default_namespace(full_name, self.config.default_namespace)
-            nav_path = [
-                group_title, 
-                slug, 
-                f'<code class="cxx-label-{type}">{type.replace("-", " ")}</code> {escape(display_name)}'
-            ]
-            if group_id == '':
-                nav_path = nav_path[1:]  # Remove group title for namespaces
-            add_nav(nav_path, perma)
+            for id in ids:
+                sym = self.index[id]
+                group_id = sym.get('group', 'default')
+                group = next((g for g in self.config.groups if g.id == group_id), None)
+                group_title = group.title if group else 'Default'
+                slug = self._symbol_type_slug(sym)
+                slug = name_mapping.get(slug, slug.replace('-', ' ').title())
+
+                type: str = sym.get('type') or 'unknown'
+                display_name = strip_default_namespace(sym.get('full_name', ''), self.config.default_namespace)
+                nav_path = [
+                    group_title,
+                    slug,
+                    f'<code class="cxx-label-{type}">{type.replace("-", " ")}</code> {escape(display_name)}'
+                ]
+                if group_id == '':
+                    nav_path = nav_path[1:]  # Remove group title for namespaces
+                add_nav(nav_path, perma)
 
         def attach(node: list|dict|str, parent: list|None = None) -> bool:
             if isinstance(node, list):
