@@ -65,11 +65,11 @@ Where `<flag>` is one of: `type`, `file`, `brief`. Wrap a symbol in backticks (`
 
 | Description                         | Syntax                                                  | Result                                            |
 |-------------------------------------|---------------------------------------------------------|---------------------------------------------------|
-| Simple reference                    | `[[ns::Color]]`                                         | [[ns::Color]]                                     |
-| Add the symbol's type               | `[[ns::Color:type]]`                                    | [[ns::Color:type]]                                |
-| Type and source file                | `[[ns::Color:type:file]]`                               | [[ns::Color:type:file]]                           |
-| Type, brief, and file               | `[[ns::Color:type:file:brief]]`                         | [[ns::Color:type:file:brief]]                     |
-| Function reference                  | `[[ns::to_name(Color):type:file:brief]]`                | [[ns::to_name(Color):type:file:brief]]            |
+| Simple reference                    | `[[Color]]`                                         | [[Color]]                                     |
+| Add the symbol's type               | `[[Color:type]]`                                    | [[Color:type]]                                |
+| Type and source file                | `[[Color:type:file]]`                               | [[Color:type:file]]                           |
+| Type, brief, and file               | `[[Color:type:file:brief]]`                         | [[Color:type:file:brief]]                     |
+| Function reference                  | `[[to_name(Color):type:file:brief]]`                | [[to_name(Color):type:file:brief]]            |
 | USR-based reference                 | `` [[`c:@N@ns@Pair`:type:brief]] ``                     | [[`c:@N@ns@Pair`:type:brief]]                     |
 | Reference by name                   | `[[Example]]`                                           | [[Example]]                                       |
 | Reference by signature (backticked) | `` [[`fn1(std::byte, Color)`]] ``                       | [[`fn1(std::byte, Color)`]]                       |
@@ -77,7 +77,7 @@ Where `<flag>` is one of: `type`, `file`, `brief`. Wrap a symbol in backticks (`
 | Template class                      | `[[filter<T>]]`                                         | [[filter<T>]]                                     |
 | Template method                     | `[[filter<T>::apply]]`                                  | [[filter<T>::apply]]                              |
 | Template method with signature      | `` [[`filter<T>::apply(T *, size_t)`]] ``               | [[`filter<T>::apply(T *, size_t)`]]               |
-| Free function                       | `[[global_function]]`                                   | [[global_function]]                               |
+| Free function                       | `` [[`::global_function`]] ``                                   | [[`::global_function`]]                               |
 | Specific overload (brief)           | `` [[`abs(double)`:brief]] ``                           | [[`abs(double)`:brief]]                           |
 | Specific overload (brief)           | `` [[`abs(int)`:brief]] ``                              | [[`abs(int)`:brief]]                              |
 | Omit signature                      | `` [[`filter<T>::apply(T *, size_t)`:nosig]] ``         | [[`filter<T>::apply(T *, size_t)`:nosig]]         |

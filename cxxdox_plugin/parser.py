@@ -7,6 +7,7 @@ import logging
 import fnmatch
 from typing import Tuple
 
+from cxxdox_plugin.identifiers import parse_cpp_identifier
 from cxxdox_plugin.index import CxxToken, CxxTokenType
 from cxxdox_plugin.highlight import to_cxx_tokens
 from .libclang21.cindex import Index as ClangIndex, CursorKind, SourceRange, Cursor, Token, TokenGroup, TokenKind, TranslationUnit, SourceLocation, AccessSpecifier, Config as ClangConfig
@@ -331,6 +332,11 @@ class Parser:
             access_spec = 'public'
         elif cursor.access_specifier == AccessSpecifier.PRIVATE:
             return
+        
+        scope, own_name, tparams, params = parse_cpp_identifier(fully_qualified_name)
+
+        if cursor.kind in {CursorKind.USING_DECLARATION}:
+            return
 
         symbol_dict = {
             'type': str(type),
@@ -338,6 +344,11 @@ class Parser:
             'name': displayname,
             'full_name': fully_qualified_name,
             'parent': parent_id,
+            'scope': scope,
+            'own_name': own_name,
+            'tparams': tparams,
+            'params': params,
+            'specialization': cursor.specialized_template is not None,
         }
         if type is not None and not cursor.kind == CursorKind.NAMESPACE:
             if cursor.extent.start.file is None:

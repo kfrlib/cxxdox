@@ -34,7 +34,16 @@ doxygen_grammar = Grammar(
     # argument list "(...)" with an optional const/volatile suffix. Trailing
     # punctuation such as ';', ',', '.' (sentence end) is NOT consumed, so it
     # stays as plain text -- matching how Doxygen tokenizes \ref <name>.
-    _ref_word            = ~r"(?:#|::)?[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?(?:(?:::|#|\.|-|/)[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?)*(?:\((?:[^()]|\([^()]*\))*\)(?:[ \t]*(?:const|volatile))?)?" / ~r"\".*\""
+    # A destructor "~" is allowed right before the final identifier segment
+    # (e.g. "~MyClass" or "MyClass::~MyClass"), mirroring Doxygen's SCOPECPP/
+    # SCOPENAME patterns used for autolinking and for \class, \namespace,
+    # etc. Doxygen's own REFWORD2 (used strictly for \ref) does NOT include
+    # "~", so "\ref ~MyClass" technically fails to match REFWORD there and
+    # falls back to plain-text autolinking of "~MyClass" (with a warning);
+    # the net effect is still that the destructor gets linked. We support
+    # "~" directly in _ref_word so \ref/\copydoc/etc. resolve destructors
+    # without relying on that fallback path.
+    _ref_word            = ~r"(?:#|::)?(?:[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?(?:::|#|\.|-|/))*~?[A-Za-z_]\w*(?:<(?:[^<>]|<[^<>]*>)*>)?(?:\((?:[^()]|\([^()]*\))*\)(?:[ \t]*(?:const|volatile))?)?" / ~r"\".*\""
     _tag_start           = "@" / "\\"
     _line_text           = ~r"[^\n]+"
     _paragraph_text      = ~r"([^@\\\$`\n]|\n(?!\n))+"
@@ -283,7 +292,8 @@ def doxygen_to_html(block: list|str,
                     index: Index,
                     context: str,
                     link_resolver: Callable[[str], str],
-                    _copy_stack: set[int | str] | None = None
+                    _copy_stack: set[int | str] | None = None,
+                    symbol_id: str | None = None,
                     ) -> str:
     if isinstance(block, str):
         return f'{escape(block)}'
@@ -308,7 +318,7 @@ def doxygen_to_html(block: list|str,
                     html_parts.append(f'<table class="cxx-table"><caption>Parameters</caption>')
                 param = item['param']
 
-                html_parts.append(f'<tr><td>{escape(param["name"])}</td><td>{doxygen_to_html(param["desc"], index, context, link_resolver)}</td></tr>')
+                html_parts.append(f'<tr><td>{escape(param["name"])}</td><td>{doxygen_to_html(param["desc"], index, context, link_resolver, symbol_id=symbol_id)}</td></tr>')
                 table = 'param'
             elif 'tparam' in item:
                 if table != 'tparam':
@@ -318,7 +328,7 @@ def doxygen_to_html(block: list|str,
                     html_parts.append(f'<table class="cxx-table"><caption>Template parameters</caption>')
                 tparam = item['tparam']
 
-                html_parts.append(f'<tr><td>{escape(tparam["name"])}</td><td>{doxygen_to_html(tparam["desc"], index, context, link_resolver)}</td></tr>')
+                html_parts.append(f'<tr><td>{escape(tparam["name"])}</td><td>{doxygen_to_html(tparam["desc"], index, context, link_resolver, symbol_id=symbol_id)}</td></tr>')
                 table = 'tparam'
             elif 'return' in item:
                 if table != 'return':
@@ -326,7 +336,7 @@ def doxygen_to_html(block: list|str,
                         html_parts.append('</table>')
                         table = None
                     html_parts.append(f'<table class="cxx-table"><caption>Returns</caption>')
-                html_parts.append(f'<tr><td></td><td>{doxygen_to_html(item["return"], index, context, link_resolver)}</td></tr>')
+                html_parts.append(f'<tr><td></td><td>{doxygen_to_html(item["return"], index, context, link_resolver, symbol_id=symbol_id)}</td></tr>')
                 table = 'return'
             elif 'retval' in item:
                 if table != 'return':
@@ -335,7 +345,7 @@ def doxygen_to_html(block: list|str,
                         table = None
                     html_parts.append(f'<table class="cxx-table"><caption>Returns</caption>')
                 retval = item['retval']
-                html_parts.append(f'<tr><td>{escape(retval["name"])}</td><td>{doxygen_to_html(retval["desc"], index, context, link_resolver)}</td></tr>')
+                html_parts.append(f'<tr><td>{escape(retval["name"])}</td><td>{doxygen_to_html(retval["desc"], index, context, link_resolver, symbol_id=symbol_id)}</td></tr>')
                 table = 'return'
             elif 'pre' in item:
                 if table != 'pre':
@@ -343,7 +353,7 @@ def doxygen_to_html(block: list|str,
                         html_parts.append('</table>')
                         table = None
                     html_parts.append(f'<table class="cxx-table"><caption>Preconditions</caption>')
-                html_parts.append(f'<tr><td></td><td>{doxygen_to_html(item["pre"], index, context, link_resolver)}</td></tr>')
+                html_parts.append(f'<tr><td></td><td>{doxygen_to_html(item["pre"], index, context, link_resolver, symbol_id=symbol_id)}</td></tr>')
                 table = 'pre'
             elif 'post' in item:
                 if table != 'post':
@@ -351,7 +361,7 @@ def doxygen_to_html(block: list|str,
                         html_parts.append('</table>')
                         table = None
                     html_parts.append(f'<table class="cxx-table"><caption>Postconditions</caption>')
-                html_parts.append(f'<tr><td></td><td>{doxygen_to_html(item["post"], index, context, link_resolver)}</td></tr>')
+                html_parts.append(f'<tr><td></td><td>{doxygen_to_html(item["post"], index, context, link_resolver, symbol_id=symbol_id)}</td></tr>')
                 table = 'post'
             elif 'exception' in item:
                 if table != 'exception':
@@ -360,7 +370,7 @@ def doxygen_to_html(block: list|str,
                         table = None
                     html_parts.append(f'<table class="cxx-table"><caption>Exceptions</caption>')
                 exception = item['exception']
-                html_parts.append(f'<tr><td>{escape(exception["name"])}</td><td>{doxygen_to_html(exception["desc"], index, context, link_resolver)}</td></tr>')
+                html_parts.append(f'<tr><td>{escape(exception["name"])}</td><td>{doxygen_to_html(exception["desc"], index, context, link_resolver, symbol_id=symbol_id)}</td></tr>')
                 table = 'exception'
             else:
                 if table:
@@ -374,13 +384,11 @@ def doxygen_to_html(block: list|str,
                     escaped_html = escape(item["c"])
                     html_parts.append(f' <code>{escaped_html}</code> ')
                 elif 'ref' in item:
-                    sym_id = index.lookup_by_scoped_name(context, item['ref'])
-                    if sym_id is not None:
-                        permalink = index.symbol_permalink(sym_id)
+                    permalink = index.scoped_lookup_link(context, item['ref'])
+                    if permalink is not None:
                         permalink = link_resolver(permalink) if permalink is not None else '#'
                         html_parts.append(f' <a href="{permalink}"><code>{escape(item["ref"])}</code></a> ')
                     else:
-                        log.warning(f"Doxygen reference not found: {item['ref']} in context {context}")
                         html_parts.append(f' <code class="cxx-not-found">{escape(item["ref"])}</code> ')
                 elif 'copybrief' in item or 'copydetails' in item or 'copydoc' in item:
                     # @copybrief copies the brief paragraph from another symbol.
@@ -389,85 +397,88 @@ def doxygen_to_html(block: list|str,
                     # and all sections) from another symbol. The copied content is
                     # rendered inline, matching Doxygen behavior.
                     ref_name = str(item.get('copybrief') or item.get('copydetails') or item.get('copydoc'))
-                    sym_id = index.lookup_by_scoped_name(context, ref_name)
-                    if sym_id is not None:
-                        ref_sym = index[sym_id]
-                        # A copied block can refer to itself directly, or through
-                        # another symbol.  Stop before recursively expanding it.
-                        # ``context`` catches the direct self-reference on the
-                        # first expansion; the stack catches longer cycles.
-                        if (sym_id in _copy_stack or
-                                ref_sym.get('full_name', '') == context):
+                    source_ids = index.scoped_lookup_all(context, ref_name)
+                    if symbol_id is not None:
+                        source_ids.discard(symbol_id)
+                    if source_ids:
+                        source_id = sorted(source_ids)[0]
+                        ref_sym = index[source_id]
+                        # A copied block can refer to itself through another
+                        # symbol. Stop before recursively expanding it.
+                        if source_id in _copy_stack:
                             command = ('copybrief' if 'copybrief' in item else
                                        'copydetails' if 'copydetails' in item else 'copydoc')
                             log.warning(f"Recursive @{command} "
-                                        f"reference: {ref_name} in context {context}")
+                                        f"reference: {ref_name} in context {context}, found {source_id}, copy_stack={_copy_stack}")
                             html_parts.append(
                                 f' <code class="cxx-copy-recursion">{escape(ref_name)}</code> ')
                             continue
-                        copy_stack = _copy_stack | {sym_id}
+                        copy_stack = _copy_stack | {source_id}
                         # Resolve refs inside the copied content using the referenced
                         # symbol's own scope as context.
                         ref_context = ref_sym.get('full_name', '') or context
                         if 'copybrief' in item:
                             copied = ref_sym.get('brief', '')
                             if copied:
-                                html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver, copy_stack))
+                                html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver, copy_stack, source_id))
                             else:
                                 log.warning(f"@copybrief target has no brief: {ref_name} in context {context}")
                         elif 'copydetails' in item:
                             copied = ref_sym.get('details', '')
                             if copied:
-                                html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver, copy_stack))
+                                html_parts.append(doxygen_to_html(copied, index, ref_context, link_resolver, copy_stack, source_id))
                             else:
                                 log.warning(f"@copydetails target has no details: {ref_name} in context {context}")
                         else:  # copydoc
                             copied_parts: list[str] = []
                             if ref_sym.get('brief'):
-                                copied_parts.append(doxygen_to_html(ref_sym['brief'], index, ref_context, link_resolver, copy_stack))
+                                copied_parts.append(doxygen_to_html(ref_sym['brief'], index, ref_context, link_resolver, copy_stack, source_id))
                             if ref_sym.get('details'):
-                                copied_parts.append(doxygen_to_html(ref_sym['details'], index, ref_context, link_resolver, copy_stack))
+                                copied_parts.append(doxygen_to_html(ref_sym['details'], index, ref_context, link_resolver, copy_stack, source_id))
                             if copied_parts:
                                 html_parts.append(' '.join(copied_parts))
                             else:
                                 log.warning(f"@copydoc target has no documentation: {ref_name} in context {context}")
                     else:
-                        log.warning(f"Doxygen reference not found: {ref_name} in context {context}")
+                        log.error(f"No copy source found for {ref_name} in context {context} after excluding symbol ID {symbol_id}")
                         html_parts.append(f' <code class="cxx-not-found">{escape(ref_name)}</code> ')
-                elif 'enum' in item or 'class' in item or 'struct' in item or 'relates' in item or 'typedef' in item:
-                    # Reference-style tags (@enum, @class, @struct, @relates, @typedef) that name a
-                    # symbol. Render the name as a link (or plain code) instead of dropping it.
-                    ref_name = str(item.get('enum') or item.get('class') or item.get('struct') or item.get('relates') or item.get('typedef'))
-                    sym_id = index.lookup_by_scoped_name(context, ref_name)
-                    if sym_id is not None:
-                        permalink = index.symbol_permalink(sym_id)
+                elif 'enum' in item or 'class' in item or 'struct' in item or 'typedef' in item:
+                    # Reference-style tags (@enum, @class, @struct, @typedef) are purely
+                    # structural hints for Doxygen's grouping/linking and carry no
+                    # documentation content of their own, so they are silently ignored here.
+                    continue
+                elif 'relates' in item:
+                    # Reference-style tag (@relates) that names a symbol. Render the name
+                    # as a link (or plain code) instead of dropping it.
+                    ref_name = str(item['relates'])
+                    permalink = index.scoped_lookup_link(context, ref_name)
+                    if permalink is not None:
                         permalink = link_resolver(permalink) if permalink is not None else '#'
                         html_parts.append(f' <a href="{permalink}"><code>{escape(ref_name)}</code></a> ')
                     else:
-                        log.warning(f"Doxygen reference not found: {ref_name} in context {context}")
                         html_parts.append(f' <code class="cxx-not-found">{escape(ref_name)}</code> ')
                 elif 'inline_formula' in item:
                     html_parts.append(f' <span class="arithmatex">\\({escape(item["inline_formula"])}\\)</span> ')
                 elif 'formula' in item:
                     html_parts.append(f'<div class="arithmatex">\\\\[\n{escape(item["formula"])}\n\\\\]</div>')
                 elif 'note' in item:
-                    html_parts.append(f'<div class="admonition note"><p class="admonition-title">Note</p> {wrap_p(doxygen_to_html(item["note"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="admonition note"><p class="admonition-title">Note</p> {wrap_p(doxygen_to_html(item["note"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'see' in item:
-                    html_parts.append(f'<div class="cxx-see"><strong>See also:</strong> {doxygen_to_html(item["see"], index, context, link_resolver)}</div>')
+                    html_parts.append(f'<div class="cxx-see"><strong>See also:</strong> {doxygen_to_html(item["see"], index, context, link_resolver, symbol_id=symbol_id)}</div>')
                 elif 'remark' in item:
-                    html_parts.append(f'<div class="admonition note"><p class="admonition-title">Remark</p> {wrap_p(doxygen_to_html(item["remark"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="admonition note"><p class="admonition-title">Remark</p> {wrap_p(doxygen_to_html(item["remark"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'warning' in item:
-                    html_parts.append(f'<div class="admonition warning"><p class="admonition-title">Warning</p> {wrap_p(doxygen_to_html(item["warning"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="admonition warning"><p class="admonition-title">Warning</p> {wrap_p(doxygen_to_html(item["warning"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'deprecated' in item:
-                    html_parts.append(f'<div class="admonition danger"><p class="admonition-title">Deprecated</p> {wrap_p(doxygen_to_html(item["deprecated"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="admonition danger"><p class="admonition-title">Deprecated</p> {wrap_p(doxygen_to_html(item["deprecated"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'since' in item:
-                    html_parts.append(f'<div class="admonition tip"><p class="admonition-title">Since</p> {wrap_p(doxygen_to_html(item["since"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="admonition tip"><p class="admonition-title">Since</p> {wrap_p(doxygen_to_html(item["since"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'version' in item:
-                    html_parts.append(f'<div class="admonition tip"><p class="admonition-title">Version</p> {wrap_p(doxygen_to_html(item["version"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="admonition tip"><p class="admonition-title">Version</p> {wrap_p(doxygen_to_html(item["version"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'example' in item:
-                    html_parts.append(f'<div class="admonition example"><p class="admonition-title">Example</p> {wrap_p(doxygen_to_html(item["example"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="admonition example"><p class="admonition-title">Example</p> {wrap_p(doxygen_to_html(item["example"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'details' in item:
-                    html_parts.append(f'<div class="cxx-details">{wrap_p(doxygen_to_html(item["details"], index, context, link_resolver))}</div>')
+                    html_parts.append(f'<div class="cxx-details">{wrap_p(doxygen_to_html(item["details"], index, context, link_resolver, symbol_id=symbol_id))}</div>')
                 elif 'code' in item:
                     html_parts.append(f'<pre><code class="language-cpp">{escape(item["code"])}</code></pre>')
                 else:

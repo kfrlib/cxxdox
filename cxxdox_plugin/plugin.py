@@ -23,7 +23,8 @@ from mkdocs.structure.nav import Navigation
 from urllib.parse import urlparse
 from pathlib import PurePosixPath
 from mkdocs.utils import find_or_create_node
-from .utils import strip_default_namespace, strip_params, strip_tparams
+from .utils import strip_default_namespace
+from .identifiers import parse_cpp_identifier
 
 @dataclass
 class IndexPage:
@@ -155,7 +156,8 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         
     def _symbol_type_slug(self, sym) -> str:
         type = sym.get('type', 'unknown')
-        type = type.replace('struct', 'class').replace('union', 'class')
+        if type in (SymbolType.STRUCT.value, SymbolType.UNION.value):
+            type = SymbolType.CLASS.value
         parent = sym.get('parent', None)
         if parent is not None:
             parent_sym = self.index[parent]
@@ -187,8 +189,8 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         def gen_uri(id: str, sym: dict, group: str) -> str:
             full_name = sym.get('full_name', '')
-            full_name = strip_params(full_name)
-            full_name = strip_tparams(full_name)
+            scope, name, _, _ = parse_cpp_identifier(full_name)
+            full_name = scope + name
             if full_name == '':
                 full_name = sym.get('full_name', '')
             full_name = _normalize_operator_name(full_name)
@@ -351,7 +353,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         generated_nav = []
 
-        def add_nav(nav_path: list[str], full_uri: str):
+        def add_nav(nav_path: list[str], full_uri: str, sorted: bool = False):
             branch = generated_nav
             for part in nav_path[:-1]:
                 new_branch = find_or_create_node(branch, part)
@@ -363,7 +365,18 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                             break
                 branch = new_branch
 
-            branch.append({nav_path[-1]: full_uri}) # type: ignore[list-item]
+            item = {nav_path[-1]: full_uri}
+            if not sorted:
+                branch.append(item) # type: ignore[list-item]
+                return
+
+            title = nav_path[-1]
+            for index, existing in enumerate(branch):
+                existing_title = next(iter(existing)) if isinstance(existing, dict) else existing
+                if title.casefold() < str(existing_title).casefold():
+                    branch.insert(index, item) # type: ignore[list-item]
+                    return
+            branch.append(item) # type: ignore[list-item]
 
         log.info('Generating symbol permalinks...')
         self._map_symbols_to_pages(files)
@@ -374,6 +387,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             json.dump(self.index.dump(), f, indent='\t', sort_keys=True, default=lambda o: o.as_dict() if hasattr(o, 'as_dict') else str(o))
 
         log.info('Generating groups...')
+        # return
 
         # Per-type index pages that should be replicated under each group.
         # The first entry (the project-wide "All Symbols" page) is excluded.
@@ -434,8 +448,8 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             type: str = first_sym.get('type') or 'unknown'
             full_name = first_sym.get('full_name', '')
             title = full_name if type == SymbolType.MACRO.value else strip_default_namespace(full_name, self.config.default_namespace)
-            title = strip_params(title)
-            title = strip_tparams(title)
+            scope, name, _, _ = parse_cpp_identifier(title)
+            title = scope + name
             if title == '':
                 title = first_sym.get('full_name', '')
             content = """---
@@ -469,7 +483,7 @@ hide:
             ]
             if group_id == '':
                 nav_path = nav_path[1:]  # Remove group title for namespaces
-            add_nav(nav_path, perma)
+            add_nav(nav_path, perma, sorted=True)
 
         def attach(node: list|dict|str, parent: list|None = None) -> bool:
             if isinstance(node, list):

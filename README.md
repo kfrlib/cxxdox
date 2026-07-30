@@ -2,6 +2,14 @@
 
 An [MkDocs] plugin that generates C++ API documentation directly from source using **libclang**. It parses headers with libclang, extracts Doxygen-style comments, and renders a browsable reference (namespaces, classes, functions, variables, typedefs, enums, concepts, macros, …) into your MkDocs site.
 
+Features include:
+
+- Cross-linked symbols with overload- and namespace-aware Doxygen references.
+- Generated pages and navigation organized by configurable source-file groups.
+- C++ source rendering with semantic syntax highlighting for types, functions, namespaces, macros, literals, and preprocessor directives.
+- Optional links from declarations to the corresponding line in a Git web interface.
+- Support for inline namespaces and display-only default-namespace shortening.
+
 > **Status:** alpha. Pre-built wheels are distributed via GitHub Releases — not on PyPI.
 
 ---
@@ -94,6 +102,9 @@ All options live under the `cxxdox:` plugin key in `mkdocs.yml`.
 | `input`           | list      | **required**             | List of input groups (see below). Each group is a `SubConfig`.                                     |
 | `path_prefix`     | `str`     | `"cxxdox/"`              | Directory under `docs/` where generated pages are placed. Use `auto/` to let the plugin derive it. |
 | `root`            | `dir`     | `.`                      | Root directory used to resolve relative `include`/`exclude` paths.                                 |
+| `groups`          | list      | `[]`                      | Optional source-file groups. Each group gets its own index and type pages.                         |
+| `git_browse`      | `str`     | `""`                     | URL template for declaration links. Supports `{SHA}`, `{FILE_PATH}`, and `{LINE}` placeholders.  |
+| `default_namespace` | `str`   | `""`                     | Namespace used only when displaying names; its prefix is omitted from matching symbols.           |
 
 ### Input group options (`input[i]`)
 
@@ -106,6 +117,40 @@ Each entry in `input` is a sub-config with:
 | `exclude_symbols` | list[str] | `[]`    | Glob patterns of symbol spellings to omit from the docs (e.g. `'*excluded_function()*'`). |
 | `compile_options` | list[str] | `[]`    | Extra clang arguments (e.g. `-std=c++17`, `-Iinclude`, `-DMACRO=1`).                      |
 | `hide_tokens`     | list[str] | `[]`    | Preprocessor tokens to hide from rendered source (e.g. `ALWAYS_INLINE`).                  |
+| `inline_namespaces` | list[str] | `[]`  | Namespace names to treat as inline while resolving and displaying symbols.                 |
+
+### Source-file groups
+
+Groups assign declarations to separate documentation sections using gitignore-style file
+patterns. Patterns support `*`, `**`, `?`, negation with `!`, rooted patterns beginning
+with `/`, and comments beginning with `#`. The last matching pattern wins. A declaration
+that does not match a configured group is placed in the default group.
+
+```yaml
+groups:
+  - id: core
+    title: Core API
+    description: The main public API.
+    file:
+      - include/mylib/**
+      - '!include/mylib/detail/**'
+  - id: extensions
+    title: Extensions
+    file:
+      - include/mylib/extensions/**
+```
+
+### Source-browser links
+
+Set `git_browse` to a URL template to make each generated declaration location link to
+the checked-out revision. The plugin resolves the current commit with `git rev-parse
+HEAD` and substitutes the commit SHA, source path, and declaration line:
+
+```yaml
+git_browse: https://github.com/example/mylib/blob/{SHA}/{FILE_PATH}#L{LINE}
+```
+
+The URL is omitted when Git metadata or a declaration location is unavailable.
 
 ### Full example
 
@@ -115,6 +160,13 @@ plugins:
   - cxxdox:
       title: Demo library Reference
       path_prefix: auto/
+      default_namespace: demo
+      git_browse: https://github.com/example/demo/blob/{SHA}/{FILE_PATH}#L{LINE}
+      groups:
+        - id: public
+          title: Public API
+          file:
+            - library.hpp
       input:
         - include:
             - library.hpp
@@ -123,6 +175,8 @@ plugins:
             - '*excluded_function()*'
           hide_tokens:
             - ALWAYS_INLINE
+          inline_namespaces:
+            - v1
           compile_options:
             - -std=c++17
             - -DMACRO=1

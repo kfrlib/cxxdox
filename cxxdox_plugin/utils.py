@@ -20,65 +20,6 @@ def normalize_symbol_name(name: str) -> str:
     return re.sub(r'\s+', replace_space, name).strip()
 
 
-def wrap_name(name: str) -> str:
-    if not name.startswith('::'):
-        name = '::' + name
-    if not name.endswith('::'):
-        name += '::'
-    return name
-
-
-def share_prefix(first: str, second: str) -> bool:
-    return first.startswith(second) or second.startswith(first)
-
-
-def strip_params(full_name: str) -> str:
-    if full_name.endswith(')::'):
-        return re.sub(r'\(.*\)::$', '::', full_name)
-    if full_name.endswith(')'):
-        return re.sub(r'\(.*\)$', '', full_name)
-    return full_name
-
-
-def strip_tparams(full_name: str) -> str:
-    if full_name.endswith('>::'):
-        return re.sub(r'\<.*\>::$', '::', full_name)
-    if full_name.endswith('>'):
-        return re.sub(r'\<.*\>$', '', full_name)
-    return full_name
-
-
-def strip_scope(full_name: str) -> str:
-    """Remove the scope prefix outside function and template arguments."""
-    paren_depth = 0
-    template_depth = 0
-    last_scope = -1
-    index = 0
-
-    while index < len(full_name):
-        character = full_name[index]
-        if character == '(':
-            paren_depth += 1
-        elif character == ')' and paren_depth:
-            paren_depth -= 1
-        elif character == '<':
-            template_depth += 1
-        elif character == '>' and template_depth:
-            template_depth -= 1
-        elif (
-            character == ':'
-            and index + 1 < len(full_name)
-            and full_name[index + 1] == ':'
-            and not paren_depth
-            and not template_depth
-        ):
-            last_scope = index
-            index += 1
-        index += 1
-
-    return full_name[last_scope + 2:] if last_scope >= 0 else full_name
-
-
 def strip_default_namespace(full_name: str, default_namespace: str) -> str:
         """Rewrite a fully-qualified symbol name for display, given a default namespace.
 
@@ -101,6 +42,21 @@ def strip_default_namespace(full_name: str, default_namespace: str) -> str:
         if not full_name.startswith("("):
             return "::" + full_name
         return full_name
+
+def add_default_namespace(name: str, default_namespace: str) -> str:
+    """Qualify a symbol name using the default namespace.
+
+    Names beginning with ``::`` are treated as fully-qualified and have the
+    leading scope operator removed. Other names are prefixed with the default
+    namespace and ``::``. Empty names or namespaces are returned unchanged.
+    """
+    if not name or not default_namespace:
+        return name
+    if name.startswith("::"):
+        return name[2:]
+    if not name[0].isalpha():
+        return name
+    return default_namespace + "::" + name
 
 
 def atomicize_subtree(el: etree.Element) -> etree.Element:

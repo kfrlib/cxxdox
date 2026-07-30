@@ -10,7 +10,9 @@
 #include "header.hpp"
 
 /// @brief A global function that is not part of any namespace.
-void global_function() {}
+inline void global_function() {}
+
+inline int a() { return 0; }
 
 /// @brief Library version
 /// @version 1.0.0
@@ -20,6 +22,52 @@ void global_function() {}
 // Namespace for the demo library
 namespace ns
 {
+
+    /// @brief A simple vector structure.
+    struct Vec {
+        Vec(int);
+    };
+
+    /// @brief Constructor for Vec
+    inline Vec::Vec(int) {}
+
+    constexpr int square(int x) { return x * x; }
+
+    template <typename T>
+    struct Test1
+    {
+        void method1();
+    };
+
+    template <std::floating_point T>
+    struct Test1<T>
+    {
+        void method2();
+    };
+
+    template <>
+    struct Test1<std::integral_constant<int, 0>>
+    {
+        void method3();
+    };
+
+    template <>
+    struct Test1<std::integral_constant<int, square(7) * 2>>
+    {
+        void method4();
+    };
+
+    template <char...>
+    struct Chars
+    {
+    };
+
+    template <>
+    struct Test1<Chars<'(', '[', '<'>>
+    {
+        void method5();
+    };
+
     inline namespace inline_ns
     {
         /// @brief A function in the inline namespace.
@@ -52,12 +100,16 @@ namespace ns
 
     /// This function will be excluded from documentation
     void excluded_function();
+    
+    inline int a() { return 1; }
 
     /// @brief An inner namespace
     namespace inner
     {
         /// @brief A function in the inner namespace
         void some_function();
+
+        inline int a() { return 2; }
     } // namespace inner
 
     /**
@@ -101,7 +153,6 @@ namespace ns
     /// @brief  Template alias for a pair of types
     /// @tparam A
     /// @tparam B
-    /// @typedef Pair
     template <typename A, typename B>
     using Pair = std::pair<A, B>;
 
@@ -111,7 +162,6 @@ namespace ns
      * This templated struct represents a point in 3D space with coordinates x,
      * y, and z.
      * @tparam T The type of the coordinates (e.g., int, float, double).
-     * @struct Point
      */
     template <typename T>
     struct Point
@@ -144,14 +194,13 @@ namespace ns
      * @note This is a note about the Example class.
      * @warning This is a warning about the Example class.
      * @class Example
-     * @copydoc Example::multiply
      */
     class Example
     {
     public:
         /// @brief Constructor
-        /// @details Initializes the Example class.
-        /// @see ~Example()
+        /// @details Initializes the Example class.  @ref Example() @ref ~Example()
+        /// @see @ref ~Example()
         Example();
 
         /// @brief Parameterized constructor
@@ -281,7 +330,7 @@ namespace ns
         return (n <= 1) ? 1 : n * factorial(n - 1);
     }
 
-    constexpr void fn1(std::byte a, Color b) noexcept { }
+    constexpr void fn1(std::byte a, Color b) noexcept {}
 
     /// @brief A wrapper that forwards any argument into its stored value.
     /// @details This utility struct uses a perfect-forwarding constructor to

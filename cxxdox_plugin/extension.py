@@ -13,7 +13,8 @@ from cxxdox_plugin.doxygen import doxygen_to_html
 from .highlight import cxx_tokens_to_html
 from .logs import log
 from .parser import Index, SymbolType
-from .utils import atomicize_subtree, strip_default_namespace, strip_params, strip_scope, strip_tparams
+from .utils import atomicize_subtree, strip_default_namespace
+from .identifiers import parse_cpp_identifier
 import os
 from pathlib import Path
 
@@ -74,7 +75,7 @@ class SymbolLinkProcessor(InlineProcessor):
         super().__init__(pattern, md)
 
     @staticmethod
-    def make_link(md: Markdown, index: Index, link_resolver: Callable[[str],str], sym_id: str, flags: list[str], default_namespace: str = '') -> Element:
+    def make_link(index: Index, link_resolver: Callable[[str],str], sym_id: str, flags: list[str], default_namespace: str = '') -> Element:
         emit_brief = 'brief' in flags
         emit_type = 'type' in flags
         emit_file = 'file' in flags
@@ -87,12 +88,13 @@ class SymbolLinkProcessor(InlineProcessor):
         full_name = sym.get('full_name', '')
         if full_name == '':
             log.warning(f"Symbol with empty full_name: {sym_id}")
-        display_name = full_name if sym.get('type') == SymbolType.MACRO.value else strip_default_namespace(full_name, default_namespace)
+        scope, name, tparams, params = parse_cpp_identifier(
+            full_name if sym.get('type') == SymbolType.MACRO.value else strip_default_namespace(full_name, default_namespace)
+        )
         if nosig:
-            display_name = strip_params(display_name)
-            display_name = strip_tparams(display_name)
+            tparams = params = ''
         if noscope:
-            display_name = strip_scope(display_name)
+            scope = ''
         link = sym.get('permalink', None)
         link = link_resolver(link) if link is not None else None
         root_el = Element('span', {'class': 'cxx-symbol-link'})
@@ -105,19 +107,24 @@ class SymbolLinkProcessor(InlineProcessor):
         link_el = Element('a')
         link_el.set('href', (link or ''))
         root_el.append(link_el)
+        if scope:
+            scope_span = Element('span', {'class': 'cxx-symbol-scope'})
+            scope_span.text = AtomicString(scope)
+            link_el.append(scope_span)
         text_span = Element('span', {'class': 'cxx-symbol-name'})
-        text_span.text = AtomicString(display_name)
+        text_span.text = AtomicString(name + tparams + params)
         link_el.append(text_span)
-        link_el.set('title', full_name)
         if emit_file and 'file' in sym:
             file_span = Element('span', {'class': 'cxx-symbol-file'})
             file_span.text = AtomicString(f' ({sym.get("file", "")}:{sym.get("line", "")})')
             root_el.append(file_span)
+        
+        brief_html = doxygen_to_html(sym.get('brief', ''), index, full_name or '', link_resolver, symbol_id=sym_id)
+        brief_text = re.sub(r'<[^>]*>', '', brief_html)
         if emit_brief and 'brief' in sym:
-            context = full_name or ''
-            brief_html = doxygen_to_html(sym.get('brief', ''), index, context, link_resolver)
             brief_el = atomicize_subtree(fromstring(f'<span class="cxx-inline-brief"> {brief_html}</span>'))
             root_el.append(brief_el)
+        link_el.set('title', brief_text)
         return root_el
 
     @staticmethod
@@ -160,11 +167,10 @@ class SymbolLinkProcessor(InlineProcessor):
         if self.index.has_symbol(sym_name):
             sym_id = sym_name
         else:
-            sym_id = self.index.lookup_by_scoped_name('', sym_name) or ''
-        if not self.index.has_symbol(sym_id):
-            log.error(f"Symbol ID not found in handleMatch: {sym_name} -> {sym_id}")
-            return dummy_span('cxx-missing-symbol', '[unknown symbol]'), m.start(0), m.end(0)
-        return self.make_link(self.md, self.index, self.link_resolver, sym_id, flags, self.default_namespace), m.start(0), m.end(0)
+            sym_id = self.index.simple_lookup_any(sym_name, self.default_namespace)
+            if not sym_id:
+                return dummy_span('cxx-missing-symbol', '[unknown symbol]'), m.start(0), m.end(0)
+        return self.make_link(self.index, self.link_resolver, sym_id, flags, self.default_namespace), m.start(0), m.end(0)
 
 
 class CxxDoxProcessor(BlockProcessor):
@@ -229,10 +235,10 @@ class CxxDoxProcessor(BlockProcessor):
             parent.append(div_highlight)
 
         contents_el = Element('div', {'class': 'cxx-contents'})
-        brief_html = '<p>' + doxygen_to_html(sym.get('brief', ''), self.index, context, self.link_resolver) + '</p>'
+        brief_html = '<p>' + doxygen_to_html(sym.get('brief', ''), self.index, context, self.link_resolver, symbol_id=sym_id) + '</p>'
         contents_el.append(atomicize_subtree(fromstring(brief_html)))
         if 'details' in sym and sym['details']:
-            details_html = '<p>' + doxygen_to_html(sym.get('details', ''), self.index, context, self.link_resolver) + '</p>'
+            details_html = '<p>' + doxygen_to_html(sym.get('details', ''), self.index, context, self.link_resolver, symbol_id=sym_id) + '</p>'
             contents_el.append(atomicize_subtree(fromstring(details_html)))
 
         parent.append(contents_el)
@@ -291,7 +297,7 @@ class CxxDoxProcessor(BlockProcessor):
             if self.index.has_symbol(identifier):
                 sym_id = identifier
             else:
-                sym_id = self.index.lookup_by_scoped_name('', identifier)
+                sym_id = self.index.scoped_lookup('', identifier)
 
             if sym_id is None:
                 log.warning(f"CxxDox symbol not found: {identifier}")
