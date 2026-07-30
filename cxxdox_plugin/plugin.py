@@ -331,7 +331,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             if file:
                 file = f"({file}:{sym.get('line', '')})"
             
-            markdown += f"- [[`{id}`:type:brief]]\n"
+            markdown += f"- [[`{id}`:type:brief:wide]]\n"
 
         if letter:
             if use_details:

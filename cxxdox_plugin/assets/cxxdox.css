@@ -192,3 +192,22 @@ code.cxx-copy-recursion {
 summary > h3 {
     margin: 0 !important;
 }
+
+.cxx-symbol-wide {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.cxx-symbol-wide > span.cxx-type {
+    flex: 0 0 20%;
+}
+
+.cxx-symbol-wide > a.cxx-symbol-href {
+    flex: 0 0 80%;
+}
+
+.cxx-symbol-wide > span.cxx-inline-brief {
+    flex: 0 0 80%;
+    margin-left: 20%;
+    box-sizing: border-box;
+}

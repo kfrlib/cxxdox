@@ -81,6 +81,7 @@ class SymbolLinkProcessor(InlineProcessor):
         emit_file = 'file' in flags
         nosig = 'nosig' in flags
         noscope = 'noscope' in flags
+        wide = 'wide' in flags
         if not index.has_symbol(sym_id):
             log.error(f"Symbol ID not found in make_link: {sym_id}")
             return dummy_span('cxx-missing-symbol', '[unknown symbol]')
@@ -97,14 +98,19 @@ class SymbolLinkProcessor(InlineProcessor):
             scope = ''
         link = sym.get('permalink', None)
         link = link_resolver(link) if link is not None else None
-        root_el = Element('span', {'class': 'cxx-symbol-link'})
+        root_classes = ['cxx-symbol-link']
+        if wide:
+            root_classes.append('cxx-symbol-wide')
+        root_el = Element('span', {'class': ' '.join(root_classes)})
         if emit_type:
-            type_span = Element('code')
-            type_span.set('class', 'cxx-label-' + sym.get('type', 'unknown'))
-            type_span.text = AtomicString(sym.get('type', '').replace('-', ' '))
-            type_span.tail = AtomicString(' ')
-            root_el.append(type_span)
-        link_el = Element('a')
+            type_wrapper = Element('span', {'class': 'cxx-type'})
+            type_code = Element('code')
+            type_code.set('class', 'cxx-label-' + sym.get('type', 'unknown'))
+            type_code.text = AtomicString(sym.get('type', '').replace('-', ' '))
+            type_wrapper.append(type_code)
+            type_wrapper.tail = AtomicString(' ')
+            root_el.append(type_wrapper)
+        link_el = Element('a', {'class': 'cxx-symbol-href'})
         link_el.set('href', (link or ''))
         root_el.append(link_el)
         if scope:
