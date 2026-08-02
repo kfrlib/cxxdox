@@ -58,6 +58,9 @@ setup(
         'mkdocs.plugins': [
             'cxxdox = cxxdox_plugin.plugin:CxxDoxPlugin',
         ],
+        'console_scripts': [
+            'cxxdox-search = cxxdox_plugin.search_symbol:main',
+        ],
     },
     install_requires=[
         'mkdocs>=1.5',
