@@ -254,6 +254,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
     def on_page_markdown(self, markdown: str, /, *, page: Page, config: MkDocsConfig, files: Files) -> str | None:
         self.current_uri = page.file.src_uri
+        log.info(f"Processing {self.current_uri}...")
 
     def on_page_content(self, html: str, /, *, page: Page, config: MkDocsConfig, files: Files) -> str | None:
         return html.replace('<b class="LAUyl5Cz5B"></b>', '')
