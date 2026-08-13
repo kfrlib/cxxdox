@@ -30,13 +30,13 @@ Download the latest wheel from the [GitHub Releases page](https://github.com/kfr
 ### 2. Install with pip
 
 ```bash
-pip install https://github.com/kfrlib/cxxdox/releases/download/v0.1.7/mkdocs_cxxdox-0.1.7-py3-none-win_amd64.whl
+pip install https://github.com/kfrlib/cxxdox/releases/download/v0.2.0/mkdocs_cxxdox-0.2.0-py3-none-win_amd64.whl
 ```
 
 Replace the URL/version with the one matching your platform from the release assets. You can also download the file and install locally:
 
 ```bash
-pip install mkdocs_cxxdox-0.1.7-py3-none-win_amd64.whl
+pip install mkdocs_cxxdox-0.2.0-py3-none-win_amd64.whl
 ```
 
 ### 3. (Recommended) Install the Material theme
@@ -46,7 +46,7 @@ The plugin works with any MkDocs theme, but it is designed for and tested with [
 ```bash
 pip install "mkdocs-cxxdox[material]"
 # or, if installing from a wheel file:
-pip install mkdocs_cxxdox-0.1.7-py3-none-win_amd64.whl "mkdocs-material>=9.1.15"
+pip install mkdocs_cxxdox-0.2.0-py3-none-win_amd64.whl "mkdocs-material>=9.1.15"
 ```
 
 ### Requirements
