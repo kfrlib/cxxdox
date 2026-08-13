@@ -1,4 +1,4 @@
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Sequence, Tuple
 import subprocess
 from cxxdox_plugin.doxygen import doxygen_to_html, escape
 import mkdocs.plugins
@@ -17,7 +17,6 @@ from .parser import Parser, Index, SymbolType
 from .logs import log
 from hashlib import md5
 from mkdocs.utils import copy_file
-from pathlib import Path
 from .extension import CxxDoxExtension
 from mkdocs.structure.nav import Navigation
 from urllib.parse import urlparse
@@ -25,13 +24,16 @@ from pathlib import PurePosixPath
 from mkdocs.utils import find_or_create_node
 from .utils import strip_default_namespace
 from .identifiers import parse_cpp_identifier
+from .snippets import (
+    render_fenced_code,
+)
 
 @dataclass
 class IndexPage:
     name: str
     title: str
     self_type: list[str]
-    parent_type: list[str|None]
+    parent_type: Sequence[str|None]
 
 name_mapping = {
     'namespaces': 'Namespaces',
@@ -147,12 +149,44 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
     page_uris: set[str]
     current_uri: str|None
     git_sha: str
+    generated_page_uris: set[str]
+    _serve_mode: bool
+    _reuse_reference: bool
+    _reference_ready: bool
+    _generated_pages: dict[str, str] | None
+    _generated_nav: list
 
     def __init__(self):
         self.index = Index()
         self.page_uris = set()
         self.current_uri = None
         self.git_sha = ''
+        self.generated_page_uris = set()
+        self._serve_mode = False
+        self._reuse_reference = False
+        self._reference_ready = False
+        self._generated_pages = None
+        self._generated_nav = []
+
+    def on_startup(self, *, command: str, dirty: bool) -> None:
+        """Enable persistent reference state only for `mkdocs serve`.
+
+        MkDocs retains plugin instances between live-reload builds only when a
+        plugin implements this lifecycle hook. The first build still parses
+        the reference; following builds reuse its completed state.
+        """
+        self._serve_mode = command == 'serve'
+
+    def on_serve(self, server, /, *, config: MkDocsConfig, builder: Callable):
+        """Keep the C++ source tree watched without invalidating its cache.
+
+        A source edit rebuilds the site so authored Markdown can reference the
+        cached API, but refreshing the C++ reference deliberately requires a
+        server restart.
+        """
+        if self._serve_mode:
+            server.watch(os.path.join(config.docs_dir, self.config.root))
+        return server
         
     def _symbol_type_slug(self, sym) -> str:
         type = sym.get('type', 'unknown')
@@ -187,10 +221,10 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                     return new_name
                 i += 1                
 
-        def gen_uri(id: str, sym: dict, group: str) -> str:
+        def gen_uri(id: str, sym: dict, group: str, include_params: bool = False) -> str:
             full_name = sym.get('full_name', '')
-            scope, name, _, _ = parse_cpp_identifier(full_name)
-            full_name = scope + name
+            scope, name, tparams, params = parse_cpp_identifier(full_name)
+            full_name = scope + name + (tparams + params if include_params else '')
             if full_name == '':
                 full_name = sym.get('full_name', '')
             full_name = _normalize_operator_name(full_name)
@@ -235,9 +269,11 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             if top_level_parent_id == id:
                 top_level_permalink = top_level_sym.get('permalink', None)
                 if top_level_permalink is None:
-                    top_level_permalink = f"{self.config.path_prefix}{gen_uri(id, sym, page_group)}.md"
+                    page_uri = f"{self.config.path_prefix}{gen_uri(id, sym, page_group)}.md"
+                    top_level_permalink = page_uri + (f"#{gen_uri(id, sym, page_group, include_params=True)}"
+                                                  if sym.get('type') == SymbolType.FUNCTION.value else '')
                     self.index.set_permalink(id, top_level_permalink)
-                self.page_uris.add(top_level_permalink)
+                self.page_uris.add(top_level_permalink.split('#', 1)[0])
             else:
                 # Process top level parent first
                 top_level_permalink = top_level_sym.get('permalink', None)
@@ -246,7 +282,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                     self.index.set_permalink(top_level_parent_id, top_level_permalink)
                 self.page_uris.add(top_level_permalink)
 
-                self.index.set_permalink(id, f"{top_level_permalink}#{gen_uri(id, sym, page_group)}")
+                self.index.set_permalink(id, f"{top_level_permalink}#{gen_uri(id, sym, page_group, include_params=True)}")
 
     def on_post_build(self, *, config: MkDocsConfig) -> None:
         css_physical_path = os.path.join(os.path.dirname(__file__), self.css_filename)
@@ -255,6 +291,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
     def on_page_markdown(self, markdown: str, /, *, page: Page, config: MkDocsConfig, files: Files) -> str | None:
         self.current_uri = page.file.src_uri
         log.info(f"Processing {self.current_uri}...")
+        return render_fenced_code(markdown) if self.config.render_snippet_markers else markdown
 
     def on_page_content(self, html: str, /, *, page: Page, config: MkDocsConfig, files: Files) -> str | None:
         return html.replace('<b class="LAUyl5Cz5B"></b>', '')
@@ -263,30 +300,46 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         dir = os.path.join(config.docs_dir, self.config.root)
         log.debug(f"CxxDoxPlugin configuration: {self.config}, dir: {dir}")
+        self._reuse_reference = (
+            self._serve_mode
+            and self.config.live_reload_cache
+            and self._reference_ready
+            and self._generated_pages is not None
+        )
+        if self._reuse_reference:
+            log.info('Reusing cached C++ reference for live reload.')
+        else:
+            # A persistent plugin instance is used by `mkdocs serve`; replace
+            # the old index before a non-cached parse so deleted symbols cannot
+            # survive into the new reference.
+            self.index = Index()
+            self._reference_ready = False
+            self._generated_pages = None
+            self._generated_nav = []
 
-        # Resolve the revision before constructing Parser instances, which
-        # initialize libclang and begin collecting symbols.
-        if self.config.git_browse:
-            try:
-                result = subprocess.run(
-                    ['git', 'rev-parse', 'HEAD'],
-                    cwd=os.path.dirname(config.config_file_path),
-                    capture_output=True,
-                    check=True,
-                    text=True,
+            # Resolve the revision before constructing Parser instances, which
+            # initialize libclang and begin collecting symbols.
+            if self.config.git_browse:
+                try:
+                    result = subprocess.run(
+                        ['git', 'rev-parse', 'HEAD'],
+                        cwd=os.path.dirname(config.config_file_path),
+                        capture_output=True,
+                        check=True,
+                        text=True,
+                    )
+                    self.git_sha = result.stdout.strip()
+                except (OSError, subprocess.CalledProcessError) as error:
+                    log.warning(f'Unable to determine Git commit hash for git_browse links: {error}')
+
+            for input_cfg in self.config.input:
+                parser = Parser(self.index,
+                    clang_args=input_cfg.compile_options,
+                    ignored_file_patterns=input_cfg.exclude,
+                    ignored_symbol_patterns=input_cfg.exclude_symbols,
+                    inline_namespaces=input_cfg.inline_namespaces
                 )
-                self.git_sha = result.stdout.strip()
-            except (OSError, subprocess.CalledProcessError) as error:
-                log.warning(f'Unable to determine Git commit hash for git_browse links: {error}')
-
-        for input_cfg in self.config.input:
-            parser = Parser(self.index,
-                clang_args=input_cfg.compile_options,
-                ignored_file_patterns=input_cfg.exclude,
-                ignored_symbol_patterns=input_cfg.exclude_symbols,
-                inline_namespaces=input_cfg.inline_namespaces
-            )
-            parser.parse_glob(input_cfg.include, input_cfg.exclude, dir)
+                parser.parse_glob(input_cfg.include, input_cfg.exclude, dir)
         
         config.extra_css.insert(0, self.css_filename)
 
@@ -340,11 +393,41 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         return markdown
 
-    def _generate_index(self, title: str, self_type: list[str], parent_type: list[str|None], group: str|None = None) -> str | None:
-        sym_ids = self.index.lookup_by_type(self_type, parent_type, group=group)
+    def _generate_index(self, title: str, self_type: Sequence[str], parent_type: Sequence[str|None], group: str|None = None) -> str | None:
+        sym_ids = self.index.lookup_by_type(list(self_type), list(parent_type), group=group)
         if not sym_ids:
             return None
         return self._generate_list(title, sym_ids)
+
+    def _attach_generated_nav(self, config: MkDocsConfig, generated_nav: list) -> None:
+        def attach(node: list|dict|str, parent: list|None = None) -> bool:
+            if isinstance(node, list):
+                for n in node:
+                    if attach(n, node):
+                        return True
+                return False
+            title = ''
+            link = ''
+            if isinstance(node, dict):
+                items: list[Tuple[str, Any]] = list(node.items())
+                if len(items) != 1:
+                    return False
+                first = items[0]
+                if isinstance(first[1], list):
+                    return attach(first[1])
+                title, link = first
+            elif isinstance(node, str):
+                link = node
+            if link == self.config.path_prefix + 'index.md':
+                if not parent:
+                    log.error(f'{self.config.path_prefix}index.md found at top level:', title)
+                    return False
+                parent.extend(generated_nav)
+                return True
+            return False
+
+        if config.nav is not None and not attach(config.nav):
+            log.error(f'Failed to attach generated nav to {self.config.path_prefix}index.md: not found')
 
     @staticmethod
     def _with_epilogue(content: str) -> str:
@@ -352,7 +435,22 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
     def on_files(self, files: Files, /, *, config: MkDocsConfig):
 
+        if self._reuse_reference and self._generated_pages is not None:
+            log.info('Reusing cached generated C++ reference pages for live reload.')
+            self.generated_page_uris = set(self._generated_pages)
+            for uri, content in self._generated_pages.items():
+                files.append(File.generated(config, uri, content=content))
+            self._attach_generated_nav(config, self._generated_nav)
+            return files
+
         generated_nav = []
+        generated_pages: dict[str, str] = {}
+        self.generated_page_uris.clear()
+
+        def add_generated_file(uri: str, content: str) -> None:
+            self.generated_page_uris.add(uri)
+            generated_pages[uri] = content
+            files.append(File.generated(config, uri, content=content))
 
         def add_nav(nav_path: list[str], full_uri: str, sorted: bool = False):
             branch = generated_nav
@@ -384,6 +482,8 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
 
         low_rank = '---\nsearch:\n  boost: 0.5\n---\n\n'
 
+        no_search = '---\nsearch:\n  exclude: true\n---\n\n'
+
         with open('out.json', 'w') as f:
             json.dump(self.index.dump(), f, indent='\t', sort_keys=True, default=lambda o: o.as_dict() if hasattr(o, 'as_dict') else str(o))
 
@@ -404,7 +504,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             # (variables, classes, ...) can stay focused on their
             # own headings.
             content = self._with_epilogue(self._generate_list(group.title, self.index.lookup_group(group.id), group.description))
-            files.append(File.generated(config, f"{self.config.path_prefix}{group.id}/index.md", content=content))
+            add_generated_file(f"{self.config.path_prefix}{group.id}/index.md", no_search+content)
             add_nav([group.title], f"{self.config.path_prefix}{group.id}/index.md")
 
             # Per-group per-type sub-pages (e.g. demo/variables/index.md)
@@ -416,7 +516,7 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                 if content is None:
                     log.info(f"Skipping empty group index page: {group_page_uri} ({page.title})")
                     continue
-                files.append(File.generated(config, group_page_uri, content=self._with_epilogue(low_rank+content)))
+                add_generated_file(group_page_uri, self._with_epilogue(no_search+content))
                 add_nav([group.title, page.title], group_page_uri)
 
         log.info('Generating project-wide index pages...')
@@ -435,13 +535,15 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             if content is None:
                 log.info(f"Skipping empty index page: {self.config.path_prefix+page.name} ({page.title})")
                 continue
-            files.append(File.generated(config, f"{self.config.path_prefix+page.name}", content=self._with_epilogue(low_rank+content)))
+            add_generated_file(f"{self.config.path_prefix+page.name}", self._with_epilogue(no_search+content))
             add_nav([page.title], self.config.path_prefix+page.name)
 
         log.info('Generating symbol pages...')
 
+        hide_toc = '---\nhide:\n  - toc\n---\n\n'
+
         for perma in self.page_uris:
-            ids = self.index.lookup_by_permalink(perma)
+            ids = self.index.lookup_by_permalink(perma, top_level_only=True)
             if len(ids) == 0:
                 log.warning(f"Permalink {perma} has no symbols")
                 continue
@@ -453,12 +555,9 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
             title = scope + name
             if title == '':
                 title = first_sym.get('full_name', '')
-            content = """---
-hide:
-  - toc
----
-
-""" + f'# {type.replace("-", " ").capitalize()} {escape(title)}\n\n'
+            header = f'# {type.replace("-", " ").capitalize()} {escape(title)}\n\n'
+            is_namespace = type == SymbolType.NAMESPACE.value
+            content = no_search if is_namespace else hide_toc
 
             log.debug(f"Generating symbol page {perma} (\"{title}\"): {ids}")
             for id in ids:
@@ -467,9 +566,9 @@ hide:
                 if sym.get('type') == SymbolType.NAMESPACE.value:
                     content += self._generate_list(f"Namespace {full_name}", self.index.lookup_children(id))
                 else:
-                    content += f"## ::: {id}\n\n"
+                    content += header + f"## ::: {id}\n\n"
 
-            files.append(File.generated(config, f"{perma}", content=self._with_epilogue(content)))
+            add_generated_file(perma, self._with_epilogue(content))
 
             group_id = first_sym.get('group', 'default')
             group = next((g for g in self.config.groups if g.id == group_id), None)
@@ -486,35 +585,12 @@ hide:
                 nav_path = nav_path[1:]  # Remove group title for namespaces
             add_nav(nav_path, perma, sorted=True)
 
-        def attach(node: list|dict|str, parent: list|None = None) -> bool:
-            if isinstance(node, list):
-                for n in node:
-                    if attach(n, node):
-                        return True
-                return False
-            title = ''
-            link = ''
-            if isinstance(node, dict):
-                items: list[Tuple[str,Any]] = list(node.items()) # type: ignore[var-annotated]
-                if len(items) != 1:
-                    return False
-                first = items[0]
-                if isinstance(first[1], list):
-                    return attach(first[1])
-                title, link = first
-            elif isinstance(node, str):
-                link = node
-            if link == self.config.path_prefix + 'index.md':
-                if not parent:
-                    log.error(f'{self.config.path_prefix}index.md found at top level:', title)
-                    return False
-                parent.extend(generated_nav)
-                return True
-            return False
+        self._attach_generated_nav(config, generated_nav)
 
-        if config.nav is not None:
-            if not attach(config.nav):
-                log.error(f'Failed to attach generated nav to {self.config.path_prefix}index.md: not found')
+        if self._serve_mode and self.config.live_reload_cache:
+            self._generated_pages = generated_pages
+            self._generated_nav = generated_nav
+            self._reference_ready = True
 
         return files
     

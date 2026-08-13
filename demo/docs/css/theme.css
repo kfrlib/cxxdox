@@ -1,0 +1,16 @@
+:root>* {
+    --md-primary-fg-color: rgb(12,41,121);
+    --md-primary-fg-color--light: rgb(133, 158, 227);
+    --md-primary-fg-color--dark: #031030;
+    --md-typeset-a-color: #4355cb;
+    --md-code-bg-color: #F3F6FF;
+}
+
+[data-md-color-scheme=slate][data-md-color-primary=black], [data-md-color-scheme=slate][data-md-color-primary=blue-grey], [data-md-color-scheme=slate][data-md-color-primary=grey], [data-md-color-scheme=slate][data-md-color-primary=white] {
+    --md-typeset-a-color: #6b79e1;
+    --md-code-bg-color: #151d2f;
+}
+
+[data-md-color-primary=black] .md-header {
+    background-color: rgb(18, 31, 66);
+}

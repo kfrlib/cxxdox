@@ -152,10 +152,13 @@ class Index:
             return self.symbols[id].get('permalink', None)
         return None
 
-    def lookup_by_permalink(self, permalink: str) -> list[str]:
+    def lookup_by_permalink(self, permalink: str, top_level_only: bool = False) -> list[str]:
         return [
             id for id, symbol in self.symbols.items()
-            if symbol.get('permalink') == permalink
+            if symbol.get('permalink', '').split('#', 1)[0] == permalink
+            and (not top_level_only
+                 or symbol.get('parent') is None
+                 or self.symbols.get(symbol['parent'], {}).get('type') == SymbolType.NAMESPACE.value)
         ]
 
     excluded_types: set[str] = {SymbolType.DEDUCTION_GUIDE.value}

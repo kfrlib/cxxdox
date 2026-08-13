@@ -226,7 +226,9 @@ class DoxygenVisitor(NodeVisitor):
         return {'remark': unwrap(paragraph)}
     def visit_code(self, node, visited_children):
         _, _, _, code_content, _, _ = visited_children
-        return {'code': code_content.strip()}
+        return {
+            'code': code_content.strip(),
+        }
     def visit__paragraph(self, node, visited_children):
         f = unwrap(visited_children)
         return f

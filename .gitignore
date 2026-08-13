@@ -18,3 +18,5 @@ libclang.so
 libclang.dylib
 libclang.*.dll
 libclang.so.*
+
+snippets

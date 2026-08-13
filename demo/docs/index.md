@@ -84,6 +84,14 @@ Where `<flag>` is one of: `type`, `file`, `brief`. Wrap a symbol in backticks (`
 | Omit scope                          | `` [[`filter<T>::apply(T *, size_t)`:noscope]] ``       | [[`filter<T>::apply(T *, size_t)`:noscope]]       |
 | Omit both signature and scope       | `` [[`filter<T>::apply(T *, size_t)`:nosig:noscope]] `` | [[`filter<T>::apply(T *, size_t)`:nosig:noscope]] |
 
+## Snippet
+
+```c++
+printf("This line appears in the test case and renders in the documentation.\n");
+|||printf("This line appears in the test case but doesn't render in the documentation.\n");
+printf("This line doesn't appear in the test case but renders in the documentation.\n");|||
+```
+
 ## License
 
 Apache-2.0 WITH LLVM-exception. See [LICENSE.TXT](https://github.com/kfrlib/cxxdox/blob/main/LICENSE.TXT). The vendored `cindex.py` and bundled `libclang` binary are part of the LLVM Project, distributed under the same license.

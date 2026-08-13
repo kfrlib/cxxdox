@@ -96,6 +96,7 @@ class SymbolLinkProcessor(InlineProcessor):
             tparams = params = ''
         if noscope:
             scope = ''
+            name = '.' + name
         link = sym.get('permalink', None)
         link = link_resolver(link) if link is not None else None
         root_classes = ['cxx-symbol-link']

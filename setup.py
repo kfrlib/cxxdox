@@ -60,6 +60,7 @@ setup(
         ],
         'console_scripts': [
             'cxxdox-search = cxxdox_plugin.search_symbol:main',
+            'cxxdox-snippets = cxxdox_plugin.snippets:main',
         ],
     },
     install_requires=[

@@ -151,10 +151,6 @@ code.cxx-copy-recursion {
 }
 
 .cxx-symbol-name {
-    font-weight: normal;
-}
-
-.cxx-symbol-name {
     font-weight: bold;
 }
 

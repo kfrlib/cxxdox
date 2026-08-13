@@ -103,6 +103,8 @@ All options live under the `cxxdox:` plugin key in `mkdocs.yml`.
 | `path_prefix`     | `str`     | `"cxxdox/"`              | Directory under `docs/` where generated pages are placed. Use `auto/` to let the plugin derive it. |
 | `root`            | `dir`     | `.`                      | Root directory used to resolve relative `include`/`exclude` paths.                                 |
 | `groups`          | list      | `[]`                      | Optional source-file groups. Each group gets its own index and type pages.                         |
+| `live_reload_cache` | `bool`  | `true`                    | During `mkdocs serve`, parse and generate the C++ reference once, then reuse it for later reloads. Restart the server after changing C++ inputs or cxxdox configuration. |
+| `render_snippet_markers` | `bool` | `true` | Process `|||` markers in C/C++ fenced blocks and keep only their rendered sides. |
 | `git_browse`      | `str`     | `""`                     | URL template for declaration links. Supports `{SHA}`, `{FILE_PATH}`, and `{LINE}` placeholders.  |
 | `default_namespace` | `str`   | `""`                     | Namespace used only when displaying names; its prefix is omitted from matching symbols.           |
 
@@ -151,6 +153,44 @@ git_browse: https://github.com/example/mylib/blob/{SHA}/{FILE_PATH}#L{LINE}
 ```
 
 The URL is omitted when Git metadata or a declaration location is unavailable.
+
+### Extracted code snippets
+
+Snippet extraction is separate from the MkDocs build. Run `cxxdox-snippets`
+with the Markdown directory to scan and the output directory to create. Every
+C/C++ fenced block is written to a `.cpp` file matching its Markdown path;
+the output directory is emptied first.
+
+```text
+cxxdox-snippets docs snippets
+```
+
+Within a C/C++ code block, use `|||` to separate the rendered and dumped
+versions of a line. For example, `rendered text|||dumped text` emits each side
+to its respective output; `rendered text|||` is render-only and `|||dumped
+text` is dump-only. Lines without `|||` are emitted unchanged in both outputs.
+To make several consecutive lines render-only, put a line containing at least
+ten pipes before and after the region (a trailing space is also allowed). The
+pipe marker lines themselves are omitted from both outputs. This is useful for
+showing supporting declarations while extracting only the declaration that
+follows them. A common indentation is removed before marker processing, so the
+marker syntax also works inside an indented Markdown block:
+
+```c++
+  ||||||||||||
+  template <typename T, size_t N>
+  struct vec {};
+  ||||||||||||
+  void fn(vec<T, N>) {}
+```
+
+The rendered output contains all lines except the pipe markers; the dumped
+snippet contains only `void fn(vec<T, N>) {}`. Snippets with no dumped content
+are skipped; pages containing only skipped snippets produce no `.cpp` or `.c`
+file.
+The plugin applies this processing to fenced blocks when
+`render_snippet_markers` is enabled. Doxygen `@code` blocks are rendered as
+written and are not extracted.
 
 ### Full example
 

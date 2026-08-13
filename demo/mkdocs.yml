@@ -8,17 +8,30 @@ theme:
     - content.code.copy
     - navigation.indexes
   palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      primary: custom
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
     # Palette toggle for light mode
-    - scheme: default
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
 
     # Palette toggle for dark mode
-    - scheme: slate
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
       toggle:
         icon: material/brightness-4
-        name: Switch to light mode
+        name: Switch to system preference
 
 extra:
   search:
@@ -33,6 +46,7 @@ plugins:
       title: Demo library Reference
       path_prefix: auto/
       default_namespace: ns
+      render_snippet_markers: true
       git_browse: https://github.com/kfrlib/cxxdox/blob/{SHA}/demo/{FILE_PATH}#L{LINE}
       input:
         - include:
@@ -81,10 +95,11 @@ markdown_extensions:
 
 extra_javascript:
   - js/math.js
-  - https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js
+  - https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.js
 
 extra_css:
-  - https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css
+  - https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css
+  - css/theme.css
 
 repo_url: https://github.com/kfrlib/cxxdox
 repo_name: CxxDox

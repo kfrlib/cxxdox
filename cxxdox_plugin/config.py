@@ -131,6 +131,12 @@ class CxxDoxConfig(Config):
     path_prefix = Type(str, default="cxxdox/")
     root = Dir(default=".")
     groups = ListOfItems(SubConfig(GroupDict), default=[])
+    # Keep the parsed reference and generated Markdown while `mkdocs serve`
+    # is running. Restart the server to refresh C++ documentation.
+    live_reload_cache = Type(bool, default=True)
+    # Remove snippet dump-only portions and render-only region markers from
+    # C/C++ fenced blocks before rendering.
+    render_snippet_markers = Type(bool, default=True)
     # URL template for links to symbol source. The placeholders {SHA},
     # {FILE_PATH}, and {LINE} are replaced while rendering documentation.
     git_browse = Type(str, default="")
