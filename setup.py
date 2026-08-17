@@ -32,17 +32,31 @@ setup(
     ],
     python_requires='>=3.9',
     packages=find_packages(),
-    # Bundled libclang binaries are extracted from the official `libclang` PyPI
-    # package during the CI wheel build (see .github/workflows/build.yml).
+    # Bundled libclang binaries and resource headers are extracted from the
+    # official LLVM release archive during the CI wheel build
+    # (see .github/workflows/build.yml).
+    #
+    # The recursive '**' glob requires setuptools >= 62.3.0; that version is
+    # pinned in pyproject.toml [build-system].requires.
     include_package_data=True,
     package_data={
         'cxxdox_plugin': [
+            # libclang shared library (platform-specific binary)
             'libclang21/libclang.dll',
             'libclang21/libclang.so',
             'libclang21/libclang.dylib',
             'libclang21/libclang.so.*',
             'libclang21/libclang.*.dll',
             'libclang21/cindex.py',
+            # Clang builtin / resource headers (stddef.h, stdarg.h,
+            # immintrin.h, arm_neon.h, …).  These live under:
+            #   libclang21/clang/<major>/include/   (explicit -resource-dir)
+            #   lib/clang/<major>/include/           (implicit discovery)
+            # Both trees are identical copies; the ** glob picks up all
+            # nested sub-directories (openmp_wrappers/, sanitizer/, etc.).
+            'libclang21/clang/**',
+            'lib/clang/**',
+            # CSS / JS assets for generated documentation pages
             'assets/*',
         ],
         'cxxdox_plugin.libclang21': [
@@ -52,6 +66,7 @@ setup(
             'libclang.so.*',
             'libclang.*.dll',
             'cindex.py',
+            'clang/**',
         ],
     },
     entry_points={

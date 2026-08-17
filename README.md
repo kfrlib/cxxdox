@@ -263,11 +263,31 @@ mkdocs serve
 Pre-built wheels are produced by the CI workflow in [`.github/workflows/build.yml`](.github/workflows/build.yml). For each platform it:
 
 1. Downloads the official LLVM release archive from the [`llvm/llvm-project`](https://github.com/llvm/llvm-project/releases) GitHub releases (e.g. `LLVM-21.1.6-Linux-X64.tar.xz`, `clang+llvm-21.1.6-x86_64-pc-windows-msvc.tar.xz`).
-2. Extracts only the `libclang` binary and stages it into `cxxdox_plugin/libclang21/` with the platform-correct name (`libclang.dll` / `libclang.so`).
-3. Builds a platform-specific wheel with `setuptools`/`build` and validates it with `twine`.
-4. Uploads the wheel as a build artifact and, on tagged releases, attaches it to the GitHub Release.
+2. Extracts the `libclang` binary and stages it into `cxxdox_plugin/libclang21/` with the platform-correct name (`libclang.dll` / `libclang.so`).
+3. Extracts the **clang resource directory** (`lib/clang/<major>/include/`) — which contains builtin headers such as `stddef.h`, `stdarg.h`, `immintrin.h`, `arm_neon.h` etc. — from the Linux LLVM archive (the resource headers are target-independent, so one copy serves all platforms) and stages it into:
+   - `cxxdox_plugin/libclang21/clang/<major>/` — used by the explicit `-resource-dir` argument
+   - `cxxdox_plugin/lib/clang/<major>/` — used by libclang's implicit resource-dir discovery
+4. Builds a platform-specific wheel with `setuptools`/`build` and validates it with `twine`.
+5. Asserts that `stddef.h` and `immintrin.h` are present inside the produced wheel (packaging test).
+6. Uploads the wheel as a build artifact and, on tagged releases, attaches it to the GitHub Release.
 
-The bundled libclang version is controlled by a single `LLVM_VERSION` variable at the top of the workflow — change it in one place to bump every platform's binary. The `libclang.dll`/`.so`/`.dylib` binaries are **not** committed to git; they are pulled from the official LLVM release at build time.
+The bundled libclang version is controlled by a single `LLVM_VERSION` variable at the top of the workflow — change it in one place to bump every platform's binary and resource headers. The `libclang.dll`/`.so`/`.dylib` binaries and resource headers are **not** committed to git; they are pulled from the official LLVM release at build time.
+
+### Why bundled resource headers matter
+
+`stddef.h`, `stdarg.h`, `immintrin.h`, `arm_neon.h` etc. are **clang builtin headers** — they are not part of the system C library (glibc / MSVC CRT) and are not installed by packages like `clang-dev`. They live in clang's *resource directory* (`clang -print-resource-dir`). Without them, parsing any header that transitively includes `<cstddef>`, `<cstdio>`, or any SIMD intrinsics fails with a fatal diagnostic and produces a silently incomplete index.
+
+By bundling the resource headers inside the wheel, cxxdox works correctly in any environment — including minimal CI containers with no system LLVM installed.
+
+### `fail_on_parse_error` config option
+
+The plugin now aborts the mkdocs build by default when clang reports a fatal diagnostic (e.g. a header file not found). To opt out and produce partial documentation anyway, add to your `mkdocs.yml`:
+
+```yaml
+plugins:
+  - cxxdox:
+      fail_on_parse_error: false
+```
 
 ---
 

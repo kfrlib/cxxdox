@@ -337,7 +337,8 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
                     clang_args=input_cfg.compile_options,
                     ignored_file_patterns=input_cfg.exclude,
                     ignored_symbol_patterns=input_cfg.exclude_symbols,
-                    inline_namespaces=input_cfg.inline_namespaces
+                    inline_namespaces=input_cfg.inline_namespaces,
+                    fail_on_parse_error=self.config.fail_on_parse_error,
                 )
                 parser.parse_glob(input_cfg.include, input_cfg.exclude, dir)
         

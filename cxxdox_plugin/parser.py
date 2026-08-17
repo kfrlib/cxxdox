@@ -2,9 +2,11 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 from os import path
+import os
 import re
 import logging
 import fnmatch
+import glob
 from typing import Tuple
 
 from cxxdox_plugin.identifiers import parse_cpp_identifier
@@ -14,11 +16,119 @@ from .libclang21.cindex import Index as ClangIndex, CursorKind, SourceRange, Cur
 from cxxdox_plugin.doxygen import parse_doxygen_comment
 from .logs import log
 from .index import *
-import glob
 from ctypes import cast, POINTER, c_ubyte, c_uint
 
-# Set library file for libclang: libclang21/libclang.{dll,so,dylib}
-ClangConfig.set_library_path(path.join(path.dirname(__file__), 'libclang21'))
+# ---------------------------------------------------------------------------
+# libclang initialisation and resource-directory resolution
+# ---------------------------------------------------------------------------
+
+# Directory that holds the bundled libclang shared library.
+_LIBCLANG_DIR = path.join(path.dirname(__file__), 'libclang21')
+
+# Set library search path for libclang: cxxdox_plugin/libclang21/libclang.{dll,so,dylib}
+ClangConfig.set_library_path(_LIBCLANG_DIR)
+
+
+def _get_clang_major_version() -> str:
+    """Return the major version string of the bundled libclang (e.g. '21').
+
+    We derive this from the directory name 'libclang21' so that it stays in
+    sync with the bundled binary automatically.  The only place that needs to
+    change on a libclang version bump is the directory name and the CI download
+    URL — not scattered hard-coded literals.
+    """
+    dir_name = path.basename(_LIBCLANG_DIR)   # e.g. "libclang21"
+    # Strip the non-digit prefix to get "21"
+    major = ''.join(c for c in dir_name if c.isdigit())
+    return major if major else '21'
+
+
+_CLANG_MAJOR = _get_clang_major_version()
+
+
+def _find_bundled_resource_dir() -> str | None:
+    """Return the bundled clang resource directory if it exists.
+
+    Layout (placed there by the CI build step):
+        cxxdox_plugin/libclang21/clang/<major>/
+
+    That is the directory that contains 'include/stddef.h' etc.
+    Pass this to clang as: -resource-dir <returned path>
+    """
+    candidate = path.join(_LIBCLANG_DIR, 'clang', _CLANG_MAJOR)
+    if path.isdir(candidate):
+        return candidate
+    return None
+
+
+def _probe_system_resource_dirs() -> list[str]:
+    """Return a list of candidate system resource directories to try as fallback."""
+    candidates = []
+    # Debian/Ubuntu packages: /usr/lib/llvm-<major>/lib/clang/<major>
+    for d in glob.glob(f'/usr/lib/llvm-*/lib/clang/{_CLANG_MAJOR}'):
+        candidates.append(d)
+    for d in glob.glob(f'/usr/lib/llvm-*/lib/clang/*'):
+        candidates.append(d)
+    # Generic /usr/lib/clang/<major> (some distros)
+    for d in glob.glob(f'/usr/lib/clang/{_CLANG_MAJOR}'):
+        candidates.append(d)
+    # Homebrew / macOS
+    for d in glob.glob(f'/usr/local/opt/llvm/lib/clang/{_CLANG_MAJOR}'):
+        candidates.append(d)
+    for d in glob.glob(f'/opt/homebrew/opt/llvm/lib/clang/{_CLANG_MAJOR}'):
+        candidates.append(d)
+    return [d for d in candidates if path.isdir(d)]
+
+
+def _validate_resource_dir(resource_dir: str) -> bool:
+    """Return True if resource_dir looks like a valid clang resource dir."""
+    return path.isfile(path.join(resource_dir, 'include', 'stddef.h'))
+
+
+def get_resource_dir_arg() -> list[str]:
+    """Return ['-resource-dir', '<path>'] to pass to clang, or [] on failure.
+
+    Precedence:
+    1. Bundled resource dir (cxxdox_plugin/libclang21/clang/<major>/)
+    2. System probe (common distro / Homebrew locations)
+    3. Empty — clang will use its own (possibly absent) implicit lookup.
+       A warning is emitted.
+    """
+    # 1. Bundled dir
+    bundled = _find_bundled_resource_dir()
+    if bundled:
+        if _validate_resource_dir(bundled):
+            return ['-resource-dir', bundled]
+        else:
+            log.warning(
+                f'Bundled clang resource dir exists at {bundled!r} but does '
+                f'not contain include/stddef.h — the wheel may have been '
+                f'packaged without resource headers.  Trying system fallbacks.'
+            )
+
+    # 2. System fallbacks
+    for candidate in _probe_system_resource_dirs():
+        if _validate_resource_dir(candidate):
+            log.warning(
+                f'Using system clang resource dir: {candidate!r}.  '
+                f'For reproducible builds, install a wheel that bundles the '
+                f'resource headers.'
+            )
+            return ['-resource-dir', candidate]
+
+    # 3. No resource dir found — warn loudly
+    log.warning(
+        'WARNING: No clang resource directory found (neither bundled nor '
+        'system-installed).  Headers such as <stddef.h>, <stdarg.h>, '
+        '<immintrin.h>, <arm_neon.h> will NOT be found during parsing, '
+        'which will silently produce an incomplete symbol index.  '
+        'Install the bundled wheel or ensure clang is installed on your system.'
+    )
+    return []
+
+
+# Validate at import time so the warning appears early (before any file is parsed).
+_RESOURCE_DIR_ARGS: list[str] = get_resource_dir_arg()
 
 verbose = True
 
@@ -116,12 +226,17 @@ class Parser:
     source_cache: dict[str, Source] = {} # Class variable to cache file contents
 
     def __init__(self, index: Index, clang_args: list[str] = [], ignored_file_patterns: list[str] = [], 
-                 ignored_symbol_patterns: list[str] = [], inline_namespaces: list[str] = []):
+                 ignored_symbol_patterns: list[str] = [], inline_namespaces: list[str] = [],
+                 fail_on_parse_error: bool = True):
         self.index = index
-        self.clang_args = clang_args
+        # Prepend the bundled -resource-dir so clang finds stddef.h, immintrin.h
+        # etc. even in a container that has no system LLVM installed.  The user's
+        # own compile_options may override it by appending a later -resource-dir.
+        self.clang_args = _RESOURCE_DIR_ARGS + list(clang_args)
         self.ignored_file_patterns = ignored_file_patterns
         self.ignored_symbol_patterns = ignored_symbol_patterns
         self.inline_namespaces = inline_namespaces
+        self.fail_on_parse_error = fail_on_parse_error
         self.clang_index = ClangIndex.create()
 
     @staticmethod
@@ -247,6 +362,79 @@ class Parser:
     def _relative_path(self, full_path: str) -> str:
         return path.relpath(full_path, path.dirname(self.file_path)).replace('\\', '/')
 
+    # Known patterns that indicate a missing builtin / resource header.
+    # These are distinct from missing system headers (which require the stdlib).
+    _BUILTIN_HEADER_NOT_FOUND = re.compile(
+        r"'(stddef\.h|stdarg\.h|stdint\.h|stdbool\.h|float\.h|limits\.h"
+        r"|immintrin\.h|arm_neon\.h|arm_sve\.h|riscv_vector\.h"
+        r"|__clang_cuda_runtime_wrapper\.h)' file not found"
+    )
+
+    def _check_diagnostics(self, file_path: str, diagnostics) -> bool:
+        """Log diagnostics and return True if a fatal error was found.
+
+        Fatal diagnostics are logged at ERROR level rather than WARNING, and
+        an actionable message is emitted for well-known causes (missing builtin
+        headers) including the resolved resource directory path.
+        """
+        # Import the Diagnostic severity constants lazily to avoid a hard dep
+        # at module level before cindex is fully loaded.
+        try:
+            from .libclang21.cindex import Diagnostic
+            FATAL = Diagnostic.Fatal
+            ERROR = Diagnostic.Error
+        except (ImportError, AttributeError):
+            FATAL = 4
+            ERROR = 3
+
+        has_fatal = False
+        has_errors = False
+        logged_any = False
+        for diag in diagnostics:
+            sev = getattr(diag, 'severity', None)
+            is_fatal = (sev == FATAL) if sev is not None else False
+            is_error = (sev == ERROR) if sev is not None else False
+            if is_fatal:
+                has_fatal = True
+            if is_fatal or is_error:
+                has_errors = True
+
+            if verbose or is_fatal or is_error:
+                if not logged_any:
+                    if is_fatal or is_error:
+                        log.error('------------DIAGNOSTICS---------------')
+                    else:
+                        log.warning('------------DIAGNOSTICS---------------')
+                    logged_any = True
+                msg = str(diag)
+                if is_fatal or is_error:
+                    log.error(msg)
+                else:
+                    log.warning(msg)
+
+                # Special-case: missing builtin header → point user to resource dir
+                m = self._BUILTIN_HEADER_NOT_FOUND.search(msg)
+                if m:
+                    rdir = _find_bundled_resource_dir()
+                    rdir_str = rdir if rdir else '<not found>'
+                    exists_str = 'exists' if (rdir and path.isdir(rdir)) else 'MISSING'
+                    log.error(
+                        f'HINT: "{m.group(1)}" is a clang builtin (resource) header — '
+                        f'it is not part of the system C library.  cxxdox looks for it in '
+                        f'the bundled resource dir: {rdir_str!r} [{exists_str}].  '
+                        f'If that path is missing, the wheel was not packaged with the '
+                        f'resource headers (see README for how to report this).'
+                    )
+
+        if logged_any:
+            suffix = '------------/DIAGNOSTICS---------------'
+            if has_errors:
+                log.error(suffix)
+            else:
+                log.warning(suffix)
+
+        return has_fatal
+
     def parse(self, file_path: str):
         log.info(f'Parsing c/c++ file: {file_path}')
         saved_symbols = self.index.symbol_count
@@ -254,19 +442,24 @@ class Parser:
         self.translation_unit = self.clang_index.parse(file_path, self.clang_args, 
                                                        options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD | TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
         if not self.translation_unit:
-            log.warning(f'Unable to load input: {file_path}')
+            log.error(f'Unable to load input: {file_path}')
             self.file_path = ''
             return
         if not self.translation_unit.cursor:
-            log.warning(f'Unable to get translation unit cursor: {file_path}')
+            log.error(f'Unable to get translation unit cursor: {file_path}')
             self.file_path = ''
             return
 
-        if verbose and len(self.translation_unit.diagnostics):
-            log.warning('------------DIAGNOSTICS---------------')
-            for diag in self.translation_unit.diagnostics:
-                log.warning(diag)
-            log.warning('------------/DIAGNOSTICS---------------')
+        has_fatal = self._check_diagnostics(file_path, self.translation_unit.diagnostics)
+
+        if has_fatal and self.fail_on_parse_error:
+            raise RuntimeError(
+                f'Fatal clang diagnostic(s) while parsing {file_path!r}.  '
+                f'See the error messages above for details.  '
+                f'To suppress this and produce a (potentially incomplete) index '
+                f'anyway, pass fail_on_parse_error=False to the Parser.'
+            )
+
         self._parse_recursive(self.translation_unit.cursor)
 
         added_symbols = self.index.symbol_count - saved_symbols

@@ -30,6 +30,75 @@ env:
   LLVM_VERSION: '21.1.6'
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Fetch the clang resource directory (builtin headers: stddef.h, immintrin.h,
+  # arm_neon.h, etc.) from the OFFICIAL Linux x64 LLVM release archive once and
+  # upload it as a shared artifact reused by all three platform wheel builds.
+  #
+  # The resource dir is target-independent: one copy serves Windows, Linux and
+  # macOS wheels.  We extract from the Linux release because that archive
+  # ships the full lib/clang/<major>/include tree including generated headers
+  # (arm_neon.h, riscv_vector.h, …) that are absent from the source tarball.
+  #
+  # Layout inside the wheel:
+  #   cxxdox_plugin/libclang21/clang/<major>/include/
+  #
+  # This is the layout clang's implicit resource-dir discovery expects:
+  #   GetResourcesPath(libclang_path) =
+  #       parent(parent(libclang_path)) / lib / clang / <MAJOR>
+  # where parent(libclang_path) = cxxdox_plugin/libclang21
+  #       parent(parent(...))    = cxxdox_plugin
+  # → implicit path = cxxdox_plugin / lib / clang / 21
+  #
+  # We also pass -resource-dir explicitly in parser.py so implicit discovery
+  # is belt-and-braces only.
+  fetch-resource-dir:
+    name: Fetch clang resource directory
+    runs-on: ubuntu-latest
+    outputs:
+      # Major version component (e.g. "21") used by later steps.
+      clang_major: ${{ steps.extract.outputs.clang_major }}
+    steps:
+      - name: Download Linux LLVM archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz"
+          echo "Downloading $url"
+          curl -fL --retry 3 -o llvm.tar.xz "$url"
+          ls -lh llvm.tar.xz
+
+      - name: Extract resource headers
+        id: extract
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Derive the major version (e.g. "21.1.6" → "21")
+          major="${LLVM_VERSION%%.*}"
+          echo "clang_major=${major}" >> "$GITHUB_OUTPUT"
+
+          # The Linux LLVM release contains lib/clang/<major>/include/
+          prefix="LLVM-${LLVM_VERSION}-Linux-X64/lib/clang/${major}/include"
+          echo "Extracting ${prefix}/ from archive …"
+          mkdir -p resource-dir/clang/${major}
+          # Strip the leading archive-root prefix so we get just include/…
+          tar -xJf llvm.tar.xz \
+              --strip-components=5 \
+              -C resource-dir/clang/${major} \
+              "${prefix}"
+          echo "Extracted $(find resource-dir -type f | wc -l) files"
+          du -sh resource-dir/
+
+      - name: Upload resource-dir artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-resource-dir
+          # Upload the whole resource-dir/ tree; the wheel build steps
+          # will download it and place it at the right location.
+          path: resource-dir/
+          if-no-files-found: error
+          retention-days: 7
+
   prepare:
     name: Prepare build matrix
     runs-on: ubuntu-latest
@@ -74,7 +143,7 @@ jobs:
 
   build:
     name: Build wheel (${{ matrix.os }} / ${{ matrix.arch }})
-    needs: prepare
+    needs: [prepare, fetch-resource-dir]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -125,6 +194,48 @@ jobs:
           cp "$libclang_path" "$dest/${{ matrix.staged_name }}"
           ls -la "$dest"
 
+      - name: Download clang resource-dir artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clang-resource-dir
+          # Download into a staging area so we can place it at the correct path.
+          path: clang-resource-dir-staging
+
+      - name: Stage resource directory into package
+        # Place the resource headers where both implicit AND explicit discovery
+        # will find them.
+        #
+        # Implicit discovery path (derived from GetResourcesPath in CIndexer.cpp):
+        #   GetResourcesPath strips the filename from libclang.so, giving
+        #   cxxdox_plugin/libclang21/, then calls Driver::GetResourcesPath which
+        #   does:  parent(dir) / CLANG_INSTALL_LIBDIR_BASENAME / "clang" / MAJOR
+        #       =  cxxdox_plugin / lib / clang / <major>
+        #
+        # So for implicit discovery we need:
+        #   cxxdox_plugin/lib/clang/<major>/include/
+        #
+        # For the explicit -resource-dir we pass in parser.py we use:
+        #   cxxdox_plugin/libclang21/clang/<major>
+        # which is a self-contained layout inside the libclang21 directory.
+        # We maintain BOTH so either approach works.
+        shell: bash
+        run: |
+          set -euo pipefail
+          major="${LLVM_VERSION%%.*}"
+
+          # Belt: explicit -resource-dir target (inside libclang21/)
+          dest_explicit="cxxdox_plugin/libclang21/clang/${major}"
+          mkdir -p "${dest_explicit}"
+          cp -r clang-resource-dir-staging/clang/${major}/include "${dest_explicit}/"
+
+          # Braces: implicit discovery target (sibling lib/clang/ next to libclang21/)
+          dest_implicit="cxxdox_plugin/lib/clang/${major}"
+          mkdir -p "${dest_implicit}"
+          cp -r clang-resource-dir-staging/clang/${major}/include "${dest_implicit}/"
+
+          echo "Resource header count: $(find cxxdox_plugin/libclang21/clang -type f | wc -l)"
+          du -sh cxxdox_plugin/libclang21/clang/ cxxdox_plugin/lib/
+
       - name: Build wheel
         run: |
           python -m pip wheel . --no-deps -w wheelhouse/
@@ -169,6 +280,53 @@ jobs:
           # sure install_requires resolves and the plugin loads.
           python -m pip install wheelhouse/*.whl
           python "${GITHUB_WORKSPACE}/.github/workflows/smoke_test.py"
+
+      - name: Assert resource headers are in the wheel
+        # Unzip the wheel (which is a zip archive) and verify the bundled
+        # clang resource directory contains stddef.h.  This test operates
+        # on the BUILT wheel file, not on the source tree, so it catches
+        # packaging glitches (missing globs, wrong include_package_data, etc.)
+        # that would allow the wheel to ship broken.
+        shell: bash
+        run: |
+          set -euo pipefail
+          major="${LLVM_VERSION%%.*}"
+          whl="$(ls wheelhouse/*.whl | head -n1)"
+          echo "Inspecting wheel: $whl"
+
+          # Wheels are zip files; list contents and search for stddef.h
+          found=$(python -c "
+          import zipfile, sys
+          whl = sys.argv[1]
+          with zipfile.ZipFile(whl) as z:
+              names = z.namelist()
+          hits = [n for n in names if n.endswith('stddef.h')]
+          if not hits:
+              print('MISSING')
+          else:
+              print('\n'.join(hits))
+          " "$whl")
+          echo "stddef.h entries in wheel: $found"
+          if [ "$found" = "MISSING" ]; then
+            echo "ERROR: stddef.h not found inside the wheel — resource headers were not packaged!"
+            exit 1
+          fi
+
+          # Also verify immintrin.h (x86 SIMD) is present
+          found_imm=$(python -c "
+          import zipfile, sys
+          whl = sys.argv[1]
+          with zipfile.ZipFile(whl) as z:
+              names = z.namelist()
+          hits = [n for n in names if n.endswith('immintrin.h')]
+          print('MISSING' if not hits else hits[0])
+          " "$whl")
+          echo "immintrin.h in wheel: $found_imm"
+          if [ "$found_imm" = "MISSING" ]; then
+            echo "ERROR: immintrin.h not found — x86 SIMD headers are missing from the wheel!"
+            exit 1
+          fi
+          echo "OK: resource headers are present in the wheel."
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4

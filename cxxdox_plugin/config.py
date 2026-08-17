@@ -147,3 +147,10 @@ class CxxDoxConfig(Config):
     # C++ correctness (e.g. `other::func` -> `::other::func`). Lookup
     # logic is unaffected. Leave empty/None to disable the transform.
     default_namespace = Type(str, default="")
+    # When true (the default), a fatal clang diagnostic (e.g. a header file
+    # not found) aborts the mkdocs build with an error rather than producing
+    # a silently incomplete reference.  Set to false only if you want to
+    # generate partial documentation despite parse errors; the resulting site
+    # will be missing symbols that are reachable only through the failing
+    # include.
+    fail_on_parse_error = Type(bool, default=True)

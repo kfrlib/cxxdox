@@ -1,0 +1,6 @@
+[build-system]
+# setuptools >= 62.3.0 is required for recursive '**' globs in package_data.
+# The resource-directory headers (lib/clang/<major>/include/**) are deeply
+# nested and cannot be expressed with single-level globs.
+requires = ["setuptools>=62.3.0", "wheel"]
+build-backend = "setuptools.build_meta"
