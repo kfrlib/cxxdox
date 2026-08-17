@@ -22,10 +22,10 @@ mkdocs-cxxdox ships as a platform-specific wheel that bundles the matching `libc
 
 Download the latest wheel from the [GitHub Releases page](https://github.com/kfrlib/cxxdox/releases):
 
-| Platform    | Wheel tag                                       |
-|-------------|-------------------------------------------------|
-| Windows x64 | `mkdocs_cxxdox-*-py3-none-win_amd64.whl`        |
-| Linux x64   | `mkdocs_cxxdox-*-py3-none-manylinux_x86_64.whl` |
+| Platform    | Wheel tag                                            |
+|-------------|------------------------------------------------------|
+| Windows x64 | `mkdocs_cxxdox-*-py3-none-win_amd64.whl`             |
+| Linux x64   | `mkdocs_cxxdox-*-py3-none-manylinux_2_17_x86_64.whl` |
 
 ### 2. Install with pip
 
@@ -86,6 +86,10 @@ mkdocs serve
 mkdocs build
 ```
 
+For large C++ projects that generate hundreds of pages, `mkdocs serve` and
+live-reload may be slow or may not function reliably. `mkdocs build` continues
+to work as usual.
+
 The generated reference appears under the configured `path_prefix` (default `cxxdox/`).
 
 ---
@@ -96,30 +100,30 @@ All options live under the `cxxdox:` plugin key in `mkdocs.yml`.
 
 ### Top-level options
 
-| Option            | Type      | Default                  | Description                                                                                        |
-|-------------------|-----------|--------------------------|----------------------------------------------------------------------------------------------------|
-| `title`           | `str`     | `"CxxDox Documentation"` | Title shown on the generated index pages.                                                          |
-| `input`           | list      | **required**             | List of input groups (see below). Each group is a `SubConfig`.                                     |
-| `path_prefix`     | `str`     | `"cxxdox/"`              | Directory under `docs/` where generated pages are placed. Use `auto/` to let the plugin derive it. |
-| `root`            | `dir`     | `.`                      | Root directory used to resolve relative `include`/`exclude` paths.                                 |
-| `groups`          | list      | `[]`                      | Optional source-file groups. Each group gets its own index and type pages.                         |
-| `live_reload_cache` | `bool`  | `true`                    | During `mkdocs serve`, parse and generate the C++ reference once, then reuse it for later reloads. Restart the server after changing C++ inputs or cxxdox configuration. |
-| `render_snippet_markers` | `bool` | `true` | Process `|||` markers in C/C++ fenced blocks and keep only their rendered sides. |
-| `git_browse`      | `str`     | `""`                     | URL template for declaration links. Supports `{SHA}`, `{FILE_PATH}`, and `{LINE}` placeholders.  |
-| `default_namespace` | `str`   | `""`                     | Namespace used only when displaying names; its prefix is omitted from matching symbols.           |
+| Option                   | Type   | Default                  | Description                                                                                                                                                              |
+|--------------------------|--------|--------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `title`                  | `str`  | `"CxxDox Documentation"` | Title shown on the generated index pages.                                                                                                                                |
+| `input`                  | list   | **required**             | List of input groups (see below). Each group is a `SubConfig`.                                                                                                           |
+| `path_prefix`            | `str`  | `"cxxdox/"`              | Directory under `docs/` where generated pages are placed. Use `auto/` to let the plugin derive it.                                                                       |
+| `root`                   | `dir`  | `.`                      | Root directory used to resolve relative `include`/`exclude` paths.                                                                                                       |
+| `groups`                 | list   | `[]`                     | Optional source-file groups. Each group gets its own index and type pages.                                                                                               |
+| `live_reload_cache`      | `bool` | `true`                   | During `mkdocs serve`, parse and generate the C++ reference once, then reuse it for later reloads. Restart the server after changing C++ inputs or cxxdox configuration. |
+| `render_snippet_markers` | `bool` | `true`                   | Process `                                                                                                                                                                |
+| `git_browse`             | `str`  | `""`                     | URL template for declaration links. Supports `{SHA}`, `{FILE_PATH}`, and `{LINE}` placeholders.                                                                          |
+| `default_namespace`      | `str`  | `""`                     | Namespace used only when displaying names; its prefix is omitted from matching symbols.                                                                                  |
 
 ### Input group options (`input[i]`)
 
 Each entry in `input` is a sub-config with:
 
-| Option            | Type      | Default | Description                                                                               |
-|-------------------|-----------|---------|-------------------------------------------------------------------------------------------|
-| `include`         | list[str] | —       | Glob patterns of files to parse (relative to `root`). **Required.**                       |
-| `exclude`         | list[str] | `[]`    | Glob patterns of files to skip.                                                           |
-| `exclude_symbols` | list[str] | `[]`    | Glob patterns of symbol spellings to omit from the docs (e.g. `'*excluded_function()*'`). |
-| `compile_options` | list[str] | `[]`    | Extra clang arguments (e.g. `-std=c++17`, `-Iinclude`, `-DMACRO=1`).                      |
-| `hide_tokens`     | list[str] | `[]`    | Preprocessor tokens to hide from rendered source (e.g. `ALWAYS_INLINE`).                  |
-| `inline_namespaces` | list[str] | `[]`  | Namespace names to treat as inline while resolving and displaying symbols.                 |
+| Option              | Type      | Default | Description                                                                               |
+|---------------------|-----------|---------|-------------------------------------------------------------------------------------------|
+| `include`           | list[str] | —       | Glob patterns of files to parse (relative to `root`). **Required.**                       |
+| `exclude`           | list[str] | `[]`    | Glob patterns of files to skip.                                                           |
+| `exclude_symbols`   | list[str] | `[]`    | Glob patterns of symbol spellings to omit from the docs (e.g. `'*excluded_function()*'`). |
+| `compile_options`   | list[str] | `[]`    | Extra clang arguments (e.g. `-std=c++17`, `-Iinclude`, `-DMACRO=1`).                      |
+| `hide_tokens`       | list[str] | `[]`    | Preprocessor tokens to hide from rendered source (e.g. `ALWAYS_INLINE`).                  |
+| `inline_namespaces` | list[str] | `[]`    | Namespace names to treat as inline while resolving and displaying symbols.                |
 
 ### Source-file groups
 
