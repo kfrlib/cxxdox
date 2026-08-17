@@ -30,75 +30,6 @@ env:
   LLVM_VERSION: '21.1.6'
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Fetch the clang resource directory (builtin headers: stddef.h, immintrin.h,
-  # arm_neon.h, etc.) from the OFFICIAL Linux x64 LLVM release archive once and
-  # upload it as a shared artifact reused by all three platform wheel builds.
-  #
-  # The resource dir is target-independent: one copy serves Windows, Linux and
-  # macOS wheels.  We extract from the Linux release because that archive
-  # ships the full lib/clang/<major>/include tree including generated headers
-  # (arm_neon.h, riscv_vector.h, …) that are absent from the source tarball.
-  #
-  # Layout inside the wheel:
-  #   cxxdox_plugin/libclang21/clang/<major>/include/
-  #
-  # This is the layout clang's implicit resource-dir discovery expects:
-  #   GetResourcesPath(libclang_path) =
-  #       parent(parent(libclang_path)) / lib / clang / <MAJOR>
-  # where parent(libclang_path) = cxxdox_plugin/libclang21
-  #       parent(parent(...))    = cxxdox_plugin
-  # → implicit path = cxxdox_plugin / lib / clang / 21
-  #
-  # We also pass -resource-dir explicitly in parser.py so implicit discovery
-  # is belt-and-braces only.
-  fetch-resource-dir:
-    name: Fetch clang resource directory
-    runs-on: ubuntu-latest
-    outputs:
-      # Major version component (e.g. "21") used by later steps.
-      clang_major: ${{ steps.extract.outputs.clang_major }}
-    steps:
-      - name: Download Linux LLVM archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          url="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/LLVM-${LLVM_VERSION}-Linux-X64.tar.xz"
-          echo "Downloading $url"
-          curl -fL --retry 3 -o llvm.tar.xz "$url"
-          ls -lh llvm.tar.xz
-
-      - name: Extract resource headers
-        id: extract
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Derive the major version (e.g. "21.1.6" → "21")
-          major="${LLVM_VERSION%%.*}"
-          echo "clang_major=${major}" >> "$GITHUB_OUTPUT"
-
-          # The Linux LLVM release contains lib/clang/<major>/include/
-          prefix="LLVM-${LLVM_VERSION}-Linux-X64/lib/clang/${major}/include"
-          echo "Extracting ${prefix}/ from archive …"
-          mkdir -p resource-dir/clang/${major}
-          # Strip the leading archive-root prefix so we get just include/…
-          tar -xJf llvm.tar.xz \
-              --strip-components=5 \
-              -C resource-dir/clang/${major} \
-              "${prefix}"
-          echo "Extracted $(find resource-dir -type f | wc -l) files"
-          du -sh resource-dir/
-
-      - name: Upload resource-dir artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: clang-resource-dir
-          # Upload the whole resource-dir/ tree; the wheel build steps
-          # will download it and place it at the right location.
-          path: resource-dir/
-          if-no-files-found: error
-          retention-days: 7
-
   prepare:
     name: Prepare build matrix
     runs-on: ubuntu-latest
@@ -110,6 +41,7 @@ jobs:
         run: |
           import json, os
           v = os.environ["LLVM_VERSION"]
+          major = v.split(".")[0]
           # Each entry maps a runner to the official LLVM archive asset name
           # and the path of libclang inside that archive. The version is
           # substituted here (env context is NOT available in strategy.matrix,
@@ -119,13 +51,16 @@ jobs:
                   "os": "windows-latest",
                   "arch": "x64",
                   "wheel_tag": "win_amd64",
+                  "clang_major": major,
                   "llvm_asset": f"clang+llvm-{v}-x86_64-pc-windows-msvc.tar.xz",
                   "libclang_in_archive": f"clang+llvm-{v}-x86_64-pc-windows-msvc/bin/libclang.dll",
+                  "resource_dir_in_archive": f"clang+llvm-{v}-x86_64-pc-windows-msvc/lib/clang/{major}/include",
                   "staged_name": "libclang.dll",
               },
               {
                   "os": "ubuntu-latest",
                   "arch": "x64",
+                  "clang_major": major,
                   # NOTE: must be a PEP 600 tag with a glibc version —
                   # bare `manylinux_x86_64` is NOT recognized by pip and
                   # wheels tagged with it fail to install. manylinux_2_17
@@ -134,6 +69,7 @@ jobs:
                   "llvm_asset": f"LLVM-{v}-Linux-X64.tar.xz",
                   # Linux release ships a versioned soname, e.g. libclang.so.21.1.6
                   "libclang_in_archive": f"LLVM-{v}-Linux-X64/lib/libclang.so.{v}",
+                  "resource_dir_in_archive": f"LLVM-{v}-Linux-X64/lib/clang/{major}/include",
                   "staged_name": "libclang.so",
               },
               # Additional OS/archs can be added here (e.g. ubuntu-arm, macos-latest).
@@ -143,7 +79,7 @@ jobs:
 
   build:
     name: Build wheel (${{ matrix.os }} / ${{ matrix.arch }})
-    needs: [prepare, fetch-resource-dir]
+    needs: [prepare]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -164,8 +100,6 @@ jobs:
           python -m pip install build wheel setuptools twine
 
       - name: Download official LLVM archive
-        # Download the prebuilt LLVM archive for this platform from the
-        # llvm/llvm-project GitHub release tagged llvmorg-<version>.
         shell: bash
         run: |
           set -euo pipefail
@@ -175,66 +109,17 @@ jobs:
           curl -fL --retry 3 -o llvm.tar.xz "$url"
           ls -la llvm.tar.xz
 
-      - name: Extract libclang from archive
+      - name: Extract libclang and resource headers
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p llvm-extract
-          tar -xJf llvm.tar.xz --wildcards -C llvm-extract "*/${{ matrix.staged_name }}*"
-          found="$(find llvm-extract -type f -name '${{ matrix.staged_name }}*' | head -n1)"
-          test -n "$found" || { echo "libclang not found after extraction"; exit 1; }
-          echo "libclang_path=$found" >> "$GITHUB_ENV"
-
-      - name: Stage libclang binary into package
-        shell: bash
-        run: |
-          set -euo pipefail
-          dest="cxxdox_plugin/libclang21"
-          mkdir -p "$dest"
-          cp "$libclang_path" "$dest/${{ matrix.staged_name }}"
-          ls -la "$dest"
-
-      - name: Download clang resource-dir artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: clang-resource-dir
-          # Download into a staging area so we can place it at the correct path.
-          path: clang-resource-dir-staging
-
-      - name: Stage resource directory into package
-        # Place the resource headers where both implicit AND explicit discovery
-        # will find them.
-        #
-        # Implicit discovery path (derived from GetResourcesPath in CIndexer.cpp):
-        #   GetResourcesPath strips the filename from libclang.so, giving
-        #   cxxdox_plugin/libclang21/, then calls Driver::GetResourcesPath which
-        #   does:  parent(dir) / CLANG_INSTALL_LIBDIR_BASENAME / "clang" / MAJOR
-        #       =  cxxdox_plugin / lib / clang / <major>
-        #
-        # So for implicit discovery we need:
-        #   cxxdox_plugin/lib/clang/<major>/include/
-        #
-        # For the explicit -resource-dir we pass in parser.py we use:
-        #   cxxdox_plugin/libclang21/clang/<major>
-        # which is a self-contained layout inside the libclang21 directory.
-        # We maintain BOTH so either approach works.
-        shell: bash
-        run: |
-          set -euo pipefail
-          major="${LLVM_VERSION%%.*}"
-
-          # Belt: explicit -resource-dir target (inside libclang21/)
-          dest_explicit="cxxdox_plugin/libclang21/clang/${major}"
-          mkdir -p "${dest_explicit}"
-          cp -r clang-resource-dir-staging/clang/${major}/include "${dest_explicit}/"
-
-          # Braces: implicit discovery target (sibling lib/clang/ next to libclang21/)
-          dest_implicit="cxxdox_plugin/lib/clang/${major}"
-          mkdir -p "${dest_implicit}"
-          cp -r clang-resource-dir-staging/clang/${major}/include "${dest_implicit}/"
-
-          echo "Resource header count: $(find cxxdox_plugin/libclang21/clang -type f | wc -l)"
-          du -sh cxxdox_plugin/libclang21/clang/ cxxdox_plugin/lib/
+          major="${{ matrix.clang_major }}"
+          mkdir -p llvm-extract cxxdox_plugin/libclang21/clang/${major}
+          tar -xJf llvm.tar.xz --wildcards -C llvm-extract "${{ matrix.libclang_in_archive }}" "${{ matrix.resource_dir_in_archive }}/*"
+          cp "llvm-extract/${{ matrix.libclang_in_archive }}" "cxxdox_plugin/libclang21/${{ matrix.staged_name }}"
+          cp -r "llvm-extract/${{ matrix.resource_dir_in_archive }}" "cxxdox_plugin/libclang21/clang/${major}/"
+          echo "Resource header count: $(find cxxdox_plugin/libclang21/clang/${major} -type f | wc -l)"
+          ls -la cxxdox_plugin/libclang21/
 
       - name: Build wheel
         run: |
