@@ -154,3 +154,5 @@ class CxxDoxConfig(Config):
     # will be missing symbols that are reachable only through the failing
     # include.
     fail_on_parse_error = Type(bool, default=True)
+    # Append the generator attribution block to generated pages.
+    epilogue = Type(bool, default=False)

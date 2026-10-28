@@ -430,8 +430,9 @@ class CxxDoxPlugin(mkdocs.plugins.BasePlugin[CxxDoxConfig]):
         if config.nav is not None and not attach(config.nav):
             log.error(f'Failed to attach generated nav to {self.config.path_prefix}index.md: not found')
 
-    @staticmethod
-    def _with_epilogue(content: str) -> str:
+    def _with_epilogue(self, content: str) -> str:
+        if not self.config.epilogue:
+            return content
         return content.rstrip() + _epilogue
 
     def on_files(self, files: Files, /, *, config: MkDocsConfig):

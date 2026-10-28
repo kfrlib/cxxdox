@@ -111,6 +111,7 @@ All options live under the `cxxdox:` plugin key in `mkdocs.yml`.
 | `render_snippet_markers` | `bool` | `true`                   | Process `                                                                                                                                                                |
 | `git_browse`             | `str`  | `""`                     | URL template for declaration links. Supports `{SHA}`, `{FILE_PATH}`, and `{LINE}` placeholders.                                                                          |
 | `default_namespace`      | `str`  | `""`                     | Namespace used only when displaying names; its prefix is omitted from matching symbols.                                                                                  |
+| `epilogue`               | `bool` | `false`                  | Append the generator attribution block to generated pages.                                                                                                               |
 
 ### Input group options (`input[i]`)
 
